@@ -30,10 +30,9 @@ const noBorderProps = {
 const FONT_TITLE = 'Playfair Display'
 const FONT_BODY  = 'Montserrat'
 
-// Parse **bold** markers from text into TextRun array
 function parseInline(text, baseOpts = {}) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
-  return parts.map(part => {
+  return parts.filter(p => p.length > 0).map(part => {
     const bold = part.startsWith('**') && part.endsWith('**')
     const content = bold ? part.slice(2, -2) : part
     return new TextRun({
@@ -43,9 +42,8 @@ function parseInline(text, baseOpts = {}) {
       color: baseOpts.color || BLACK,
       italics: baseOpts.italic || false,
       font: baseOpts.font || FONT_BODY,
-      allCaps: baseOpts.allCaps || false
     })
-  }).filter(r => r.root?.find?.(x => x?.text !== '') || true)
+  })
 }
 
 function t(text, opts = {}) {
@@ -74,13 +72,10 @@ function empty(space = 160) {
 }
 
 function pageBreak() {
-  return new Paragraph({
-    children: [new TextRun({ break: 1 })]
-  })
+  return new Paragraph({ children: [new TextRun({ break: 1 })] })
 }
 
 function sectionTitle(text) {
-  // Never italic — remove italic override
   return p(
     [t(text, { size: 64, color: BLUE, font: FONT_TITLE })],
     { center: true, before: 400, after: 320 }
@@ -112,66 +107,8 @@ function fullPageImageSection(imgBuffer, imgType) {
   }
 }
 
-function coverPageSection(imgBuffer, nom, titre) {
-  return {
-    properties: { page: noBorderProps },
-    children: [
-      new Paragraph({
-        spacing: { before: 0, after: 0 },
-        children: [
-          new ImageRun({
-            data: imgBuffer,
-            transformation: { width: IMG_W, height: IMG_H },
-            type: 'jpg'
-          })
-        ]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.LEFT,
-        frameProperties: createFrameProperties({
-          width: 5400,
-          height: 400,
-          x: 900,
-          y: 2000,
-          anchor: { horizontal: FrameAnchorType.TEXT, vertical: FrameAnchorType.TEXT },
-          wrap: FrameWrap.AROUND,
-        }),
-        spacing: { before: 0, after: 60 },
-        children: [t('DOSSIER DE COMPÉTENCES', { size: 16, color: WHITE, font: FONT_BODY })]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.LEFT,
-        frameProperties: createFrameProperties({
-          width: 5400,
-          height: 700,
-          x: 900,
-          y: 2600,
-          anchor: { horizontal: FrameAnchorType.TEXT, vertical: FrameAnchorType.TEXT },
-          wrap: FrameWrap.AROUND,
-        }),
-        spacing: { before: 0, after: 40 },
-        children: [t(nom, { size: 44, bold: true, color: WHITE, font: FONT_TITLE })]
-      }),
-      new Paragraph({
-        alignment: AlignmentType.LEFT,
-        frameProperties: createFrameProperties({
-          width: 5400,
-          height: 500,
-          x: 900,
-          y: 3400,
-          anchor: { horizontal: FrameAnchorType.TEXT, vertical: FrameAnchorType.TEXT },
-          wrap: FrameWrap.AROUND,
-        }),
-        spacing: { before: 0, after: 0 },
-        children: [t(titre, { size: 22, bold: true, color: WHITE, font: FONT_BODY })]
-      }),
-    ]
-  }
-}
-
-function buildDocument(d) {
+function buildDocument(d, coverImgBuffer) {
   const assetsDir = path.join(__dirname, '..', 'template_assets')
-  const coverImg     = fs.readFileSync(path.join(assetsDir, 'cover.jpg'))
   const evertPageImg = fs.readFileSync(path.join(assetsDir, 'evert_page.jpg'))
   const backCoverImg = fs.readFileSync(path.join(assetsDir, 'back_cover.jpg'))
 
@@ -205,12 +142,8 @@ function buildDocument(d) {
   const expChildren = [sectionTitle('Expériences')]
 
   d.experiences.forEach((exp, idx) => {
-    // Page break before each experience except the first
-    if (idx > 0) {
-      expChildren.push(pageBreak())
-    }
+    if (idx > 0) expChildren.push(pageBreak())
 
-    // Header: ENTREPRISE – role (not italic, bold)
     expChildren.push(p([
       t('↗  ', { bold: true, size: 22, color: BLUE }),
       t(exp.entreprise + ' ', { bold: true, size: 22, color: BLUE, allCaps: true }),
@@ -225,22 +158,21 @@ function buildDocument(d) {
     }
 
     exp.activites?.forEach(act => {
-      // Theme as bold sub-header
-      expChildren.push(p([t(act.theme, { size: 20, bold: true, color: BLUE })], { after: 60, before: 120 }))
+      expChildren.push(p([t(act.theme, { size: 20, bold: true, color: BLUE })], { before: 120, after: 60 }))
       act.points?.forEach(pt =>
         expChildren.push(p(parseInline(pt, { size: 20 }), { bullet: true, after: 40 }))
       )
     })
 
     if (exp.enjeux?.length) {
-      expChildren.push(p([t('Enjeux :', { size: 20, bold: true })], { after: 60, before: 120 }))
+      expChildren.push(p([t('Enjeux :', { size: 20, bold: true })], { before: 120, after: 60 }))
       exp.enjeux.forEach(e =>
         expChildren.push(p(parseInline(e, { size: 20 }), { bullet: true, after: 40 }))
       )
     }
 
     if (exp.resultats?.length) {
-      expChildren.push(p([t('Résultats :', { size: 20, bold: true })], { after: 60, before: 120 }))
+      expChildren.push(p([t('Résultats :', { size: 20, bold: true })], { before: 120, after: 60 }))
       exp.resultats.forEach(r =>
         expChildren.push(p(parseInline(r, { size: 20 }), { bullet: true, after: 40 }))
       )
@@ -292,9 +224,13 @@ function buildDocument(d) {
       }]
     },
     sections: [
-      coverPageSection(coverImg, d.nom, d.titre),
+      // Cover: image Sharp avec nom+titre superposés
+      fullPageImageSection(coverImgBuffer, 'jpg'),
+      // Résumé
       { properties: { page: pageProps }, children: resumeChildren },
+      // Expériences
       { properties: { page: pageProps }, children: expChildren },
+      // Formation & Langues
       {
         properties: { page: pageProps },
         children: formationChildren.length ? formationChildren : [empty()]
