@@ -5,31 +5,31 @@ const {
 } = require('docx')
 const fs = require('fs')
 const path = require('path')
-
+ 
 const BLUE = '1400FF'
 const BLACK = '000000'
 const WHITE = 'FFFFFF'
-
+ 
 const PAGE_W = 11906
 const PAGE_H = 16838
 const MARGIN = 1134
-
+ 
 const IMG_W = 794
 const IMG_H = 1122
-
+ 
 const pageProps = {
   size: { width: PAGE_W, height: PAGE_H },
   margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN }
 }
-
+ 
 const noBorderProps = {
   size: { width: PAGE_W, height: PAGE_H },
   margin: { top: 0, right: 0, bottom: 0, left: 0 }
 }
-
+ 
 const FONT_TITLE = 'Playfair Display'
 const FONT_BODY  = 'Montserrat'
-
+ 
 function parseInline(text, baseOpts = {}) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return parts.filter(p => p.length > 0).map(part => {
@@ -45,7 +45,7 @@ function parseInline(text, baseOpts = {}) {
     })
   })
 }
-
+ 
 function t(text, opts = {}) {
   return new TextRun({
     text,
@@ -57,38 +57,41 @@ function t(text, opts = {}) {
     allCaps: opts.allCaps || false
   })
 }
-
+ 
 function p(children, opts = {}) {
   return new Paragraph({
     alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
     spacing: { before: opts.before || 0, after: opts.after || 80 },
     numbering: opts.bullet ? { reference: 'bullet1', level: 0 } : undefined,
+    keepLines: opts.keepLines || false,
+    keepNext: opts.keepNext || false,
+    pageBreakBefore: opts.pageBreakBefore || false,
     children: Array.isArray(children) ? children : [children]
   })
 }
-
+ 
 function empty(space = 160) {
   return new Paragraph({ spacing: { after: space }, children: [new TextRun('')] })
 }
-
+ 
 function pageBreak() {
   return new Paragraph({ children: [new TextRun({ break: 1 })] })
 }
-
+ 
 function sectionTitle(text) {
   return p(
     [t(text, { size: 64, color: BLUE, font: FONT_TITLE })],
     { center: true, before: 400, after: 320 }
   )
 }
-
+ 
 function subTitle(text) {
   return p(
     [t(text, { size: 28, bold: true, color: BLUE, font: FONT_TITLE })],
     { center: true, before: 200, after: 160 }
   )
 }
-
+ 
 function fullPageImageSection(imgBuffer, imgType) {
   return {
     properties: { page: noBorderProps },
@@ -106,12 +109,12 @@ function fullPageImageSection(imgBuffer, imgType) {
     ]
   }
 }
-
+ 
 function buildDocument(d, coverImgBuffer) {
   const assetsDir = path.join(__dirname, '..', 'template_assets')
   const evertPageImg = fs.readFileSync(path.join(assetsDir, 'evert_page.jpg'))
   const backCoverImg = fs.readFileSync(path.join(assetsDir, 'back_cover.jpg'))
-
+ 
   // ── Résumé ──
   const resumeChildren = [
     p([t('RÉSUMÉ', { size: 72, color: BLUE, font: FONT_TITLE })], { center: true, before: 400, after: 80 }),
@@ -137,55 +140,56 @@ function buildDocument(d, coverImgBuffer) {
       ], { bullet: true, after: 60 })
     ),
   ]
-
+ 
   // ── Expériences — 1 par page ──
   const expChildren = [sectionTitle('Expériences')]
-
+ 
   d.experiences.forEach((exp, idx) => {
-    if (idx > 0) expChildren.push(pageBreak())
-
+    // keepL = keep all lines of exp together, page break before each exp except first
+    const kl = { keepLines: true }
+ 
     expChildren.push(p([
       t('↗  ', { bold: true, size: 22, color: BLUE }),
       t(exp.entreprise + ' ', { bold: true, size: 22, color: BLUE, allCaps: true }),
       t('– ', { size: 22, color: BLUE, bold: true }),
       t(exp.role + (exp.stack ? ' ' + exp.stack : ''), { size: 22, color: BLUE, bold: true }),
-    ], { before: 240, after: 60 }))
-
-    expChildren.push(p([t(exp.dates, { size: 20, color: BLUE })], { after: 120 }))
-
+    ], { before: 240, after: 60, keepLines: true, keepNext: true, pageBreakBefore: idx > 0 }))
+ 
+    expChildren.push(p([t(exp.dates, { size: 20, color: BLUE })], { after: 120, ...kl, keepNext: true }))
+ 
     if (exp.projet) {
-      expChildren.push(p(parseInline(exp.projet, { size: 20 }), { after: 100 }))
+      expChildren.push(p(parseInline(exp.projet, { size: 20 }), { after: 100, ...kl, keepNext: true }))
     }
-
+ 
     exp.activites?.forEach(act => {
-      expChildren.push(p([t(act.theme, { size: 20, bold: true, color: BLUE })], { before: 120, after: 60 }))
+      expChildren.push(p([t(act.theme, { size: 20, bold: true, color: BLACK })], { before: 120, after: 60, ...kl, keepNext: true }))
       act.points?.forEach(pt =>
-        expChildren.push(p(parseInline(pt, { size: 20 }), { bullet: true, after: 40 }))
+        expChildren.push(p(parseInline(pt, { size: 20 }), { bullet: true, after: 40, ...kl, keepNext: true }))
       )
     })
-
+ 
     if (exp.enjeux?.length) {
-      expChildren.push(p([t('Enjeux :', { size: 20, bold: true })], { before: 120, after: 60 }))
+      expChildren.push(p([t('Enjeux :', { size: 20, bold: true, color: BLACK })], { before: 120, after: 60, ...kl, keepNext: true }))
       exp.enjeux.forEach(e =>
-        expChildren.push(p(parseInline(e, { size: 20 }), { bullet: true, after: 40 }))
+        expChildren.push(p(parseInline(e, { size: 20 }), { bullet: true, after: 40, ...kl, keepNext: true }))
       )
     }
-
+ 
     if (exp.resultats?.length) {
-      expChildren.push(p([t('Résultats :', { size: 20, bold: true })], { before: 120, after: 60 }))
+      expChildren.push(p([t('Résultats :', { size: 20, bold: true, color: BLACK })], { before: 120, after: 60, ...kl, keepNext: true }))
       exp.resultats.forEach(r =>
-        expChildren.push(p(parseInline(r, { size: 20 }), { bullet: true, after: 40 }))
+        expChildren.push(p(parseInline(r, { size: 20 }), { bullet: true, after: 40, ...kl, keepNext: true }))
       )
     }
-
+ 
     if (exp.env_technique?.length) {
       expChildren.push(p([
         t('Environnement technique : ', { size: 20, bold: true }),
         t(exp.env_technique.join(', '), { size: 20 })
-      ], { before: 120, after: 80 }))
+      ], { before: 120, after: 80, ...kl }))
     }
   })
-
+ 
   // ── Formation & Langues ──
   const formationChildren = []
   if (d.formations?.length) {
@@ -206,7 +210,7 @@ function buildDocument(d, coverImgBuffer) {
       )
     })
   }
-
+ 
   return new Document({
     numbering: {
       config: [{
@@ -224,8 +228,21 @@ function buildDocument(d, coverImgBuffer) {
       }]
     },
     sections: [
-      // Cover: image Sharp avec nom+titre superposés
+      // Page 1 : cover image Sharp (visuel)
       fullPageImageSection(coverImgBuffer, 'jpg'),
+ 
+      // Page 2 : nom + titre modifiables en texte Word
+      {
+        properties: { page: pageProps },
+        children: [
+          empty(2400),
+          p([t('DOSSIER DE COMPÉTENCES', { size: 18, color: BLUE, font: FONT_BODY })], { center: true, after: 120 }),
+          empty(80),
+          p([t(d.nom, { size: 44, bold: true, color: BLUE, font: FONT_TITLE })], { center: true, after: 80 }),
+          p([t(d.titre, { size: 24, bold: true, color: BLUE, font: FONT_BODY })], { center: true, after: 80 }),
+        ]
+      },
+ 
       // Résumé
       { properties: { page: pageProps }, children: resumeChildren },
       // Expériences
@@ -240,5 +257,6 @@ function buildDocument(d, coverImgBuffer) {
     ]
   })
 }
-
+ 
 module.exports = { buildDocument }
+ 
