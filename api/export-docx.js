@@ -1,5 +1,6 @@
 import { Packer } from 'docx'
 import { buildDocument } from './docx-builder.js'
+import { generateCover } from './cover-generator.js'
 
 function getSession(req) {
   const cookie = req.cookies?.evert_session
@@ -19,7 +20,10 @@ export default async function handler(req, res) {
   if (!dossier) return res.status(400).json({ error: 'Dossier manquant' })
 
   try {
-    const doc = buildDocument(dossier)
+    // Generate cover image with Sharp (nom + titre dynamiques)
+    const coverImgBuffer = await generateCover(dossier.nom, dossier.titre)
+
+    const doc = buildDocument(dossier, coverImgBuffer)
     const buffer = await Packer.toBuffer(doc)
 
     const filename = `Dossier_EverT_${dossier.nom.replace(/\s+/g, '_')}.docx`
