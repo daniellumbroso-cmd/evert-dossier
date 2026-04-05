@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
+    "docx": "^8.5.0",
+    "formidable": "^3.5.1",
+    "google-auth-library": "^9.11.0",
+    "googleapis": "^140.0.0"
+  }
+}
