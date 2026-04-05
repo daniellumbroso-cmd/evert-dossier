@@ -38,7 +38,15 @@ RÈGLES DE RÉDACTION :
 - Stack technique mise en avant dès le titre
 - Résultats chiffrés si disponibles dans le CV source
 - Ton professionnel mais vivant, jamais robotique
-- Ne pas inventer d'informations non présentes dans le CV
+- RÈGLE ABSOLUE ANTI-INVENTION : Ne jamais inventer, déduire ou extrapoler d'informations non explicitement présentes dans le CV source. Si une information est absente, ne pas la mentionner. Si tu n'es pas certain d'une donnée, ne pas l'inclure.
+
+MISE EN GRAS des mots-clés importants :
+- Dans les textes (a_propos, projet, points d'activités, enjeux, résultats), entoure les mots-clés techniques importants avec **double astérisques** : ex "mise en place d'un pipeline **dbt** sur **BigQuery**"
+- Si un besoin client est fourni, les mots-clés du besoin présents dans le CV doivent être mis en gras en priorité
+
+ORDRE DES COMPÉTENCES TECHNIQUES :
+- Si un besoin client est fourni, mettre en PREMIER dans chaque catégorie les items qui correspondent au besoin
+- Les compétences non pertinentes pour le besoin client passent en dernier
 
 RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
 {
@@ -59,7 +67,7 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
       "dates": "",
       "projet": "",
       "activites": [
-        {"theme": "Ingénierie de données (dbt & BigQuery)", "points": ["Point 1", "Point 2"]}
+        {"theme": "Ingénierie de données (dbt & BigQuery)", "points": ["Point 1 avec **mot-clé** en gras", "Point 2"]}
       ],
       "enjeux": ["Enjeu 1", "Enjeu 2"],
       "resultats": ["Résultat 1 chiffré", "Résultat 2"],
@@ -88,14 +96,18 @@ export default async function handler(req, res) {
     const community = fields.community?.[0] || 'DATA'
     const instructions = fields.instructions?.[0] || ''
     const cvText = fields.cvText?.[0] || ''
+    const besoinClient = fields.besoinClient?.[0] || ''
     const pdfFile = files.pdf?.[0]
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+    const besoinSection = besoinClient
+      ? `\n\nBESOIN CLIENT (mets en gras les mots-clés correspondants trouvés dans le CV, réordonne les compétences techniques en priorité) :\n${besoinClient}`
+      : ''
+
     let messages
 
     if (pdfFile) {
-      // PDF mode
       const pdfBuffer = fs.readFileSync(pdfFile.filepath)
       const base64 = pdfBuffer.toString('base64')
 
@@ -108,15 +120,14 @@ export default async function handler(req, res) {
           },
           {
             type: 'text',
-            text: `Génère le dossier de compétences Ever"T à partir de ce CV PDF.\nCommunauté cible : ${community}${instructions ? '\nInstructions : ' + instructions : ''}`
+            text: `Génère le dossier de compétences Ever"T à partir de ce CV PDF.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}`
           }
         ]
       }]
     } else if (cvText) {
-      // Text mode
       messages = [{
         role: 'user',
-        content: `Génère le dossier de compétences Ever"T à partir de ce CV.\nCommunauté cible : ${community}${instructions ? '\nInstructions : ' + instructions : ''}\n\nCV :\n${cvText}`
+        content: `Génère le dossier de compétences Ever"T à partir de ce CV.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}\n\nCV :\n${cvText}`
       }]
     } else {
       return res.status(400).json({ error: 'Aucun CV fourni' })
