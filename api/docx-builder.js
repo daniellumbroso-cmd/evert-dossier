@@ -1,36 +1,36 @@
 const {
   Document, Paragraph, TextRun, ImageRun,
-  AlignmentType, LevelFormat, Textbox,
-  FrameAnchorType, FrameWrap
+  AlignmentType, LevelFormat,
+  FrameAnchorType, FrameWrap, createFrameProperties
 } = require('docx')
 const fs = require('fs')
 const path = require('path')
- 
+
 const BLUE = '1400FF'
 const BLACK = '000000'
 const WHITE = 'FFFFFF'
- 
+
 const PAGE_W = 11906
 const PAGE_H = 16838
 const MARGIN = 1134
- 
+
 // A4 at 96dpi for full-page bleed
 const IMG_W = 794
 const IMG_H = 1122
- 
+
 const pageProps = {
   size: { width: PAGE_W, height: PAGE_H },
   margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN }
 }
- 
+
 const noBorderProps = {
   size: { width: PAGE_W, height: PAGE_H },
   margin: { top: 0, right: 0, bottom: 0, left: 0 }
 }
- 
+
 const FONT_TITLE = 'Playfair Display'
 const FONT_BODY  = 'Montserrat'
- 
+
 function t(text, opts = {}) {
   return new TextRun({
     text,
@@ -42,7 +42,7 @@ function t(text, opts = {}) {
     allCaps: opts.allCaps || false
   })
 }
- 
+
 function p(children, opts = {}) {
   return new Paragraph({
     alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
@@ -51,25 +51,25 @@ function p(children, opts = {}) {
     children: Array.isArray(children) ? children : [children]
   })
 }
- 
+
 function empty(space = 160) {
   return new Paragraph({ spacing: { after: space }, children: [new TextRun('')] })
 }
- 
+
 function sectionTitle(text) {
   return p(
     [t(text, { size: 64, color: BLUE, font: FONT_TITLE, italic: text === 'Expériences' })],
     { center: true, before: 400, after: 320 }
   )
 }
- 
+
 function subTitle(text) {
   return p(
     [t(text, { size: 28, bold: true, color: BLUE, font: FONT_TITLE })],
     { center: true, before: 200, after: 160 }
   )
 }
- 
+
 function fullPageImageSection(imgBuffer, imgType) {
   return {
     properties: { page: noBorderProps },
@@ -87,29 +87,25 @@ function fullPageImageSection(imgBuffer, imgType) {
     ]
   }
 }
- 
+
+// Cover page: full-page image + text overlay via frameProperties (docx v8 compatible)
 function coverPageSection(imgBuffer, nom, titre) {
-  const nameBox = new Textbox(
-    [
-      p([t('DOSSIER DE COMPÉTENCES', { size: 16, color: WHITE, font: FONT_BODY })], { center: true, after: 80 }),
-      p([t(nom, { size: 36, bold: true, color: WHITE, font: FONT_TITLE })], { center: true, after: 60 }),
-      p([t(titre, { size: 20, color: WHITE, font: FONT_BODY })], { center: true, after: 0 }),
-    ],
-    {
-      frame: {
-        anchorType: FrameAnchorType.TEXT,
-        wrap: FrameWrap.AROUND,
-        width: 5000,
-        height: 1400,
-        x: 3500,
-        y: 2200,
-      }
-    }
-  )
- 
+  const frameProps = createFrameProperties({
+    width: 5200,
+    height: 1600,
+    x: 1000,
+    y: 2400,
+    anchor: {
+      horizontal: FrameAnchorType.TEXT,
+      vertical: FrameAnchorType.TEXT,
+    },
+    wrap: FrameWrap.AROUND,
+  })
+
   return {
     properties: { page: noBorderProps },
     children: [
+      // Full-page background image
       new Paragraph({
         spacing: { before: 0, after: 0 },
         children: [
@@ -120,17 +116,51 @@ function coverPageSection(imgBuffer, nom, titre) {
           })
         ]
       }),
-      nameBox
+      // Text overlay — label
+      new Paragraph({
+        alignment: AlignmentType.LEFT,
+        frameProperties: frameProps,
+        spacing: { before: 0, after: 60 },
+        children: [t('DOSSIER DE COMPÉTENCES', { size: 16, color: WHITE, font: FONT_BODY })]
+      }),
+      // Name
+      new Paragraph({
+        alignment: AlignmentType.LEFT,
+        frameProperties: createFrameProperties({
+          width: 5200,
+          height: 800,
+          x: 1000,
+          y: 3200,
+          anchor: { horizontal: FrameAnchorType.TEXT, vertical: FrameAnchorType.TEXT },
+          wrap: FrameWrap.AROUND,
+        }),
+        spacing: { before: 0, after: 40 },
+        children: [t(nom, { size: 40, bold: true, color: WHITE, font: FONT_TITLE })]
+      }),
+      // Title
+      new Paragraph({
+        alignment: AlignmentType.LEFT,
+        frameProperties: createFrameProperties({
+          width: 5200,
+          height: 600,
+          x: 1000,
+          y: 3900,
+          anchor: { horizontal: FrameAnchorType.TEXT, vertical: FrameAnchorType.TEXT },
+          wrap: FrameWrap.AROUND,
+        }),
+        spacing: { before: 0, after: 0 },
+        children: [t(titre, { size: 22, bold: true, color: WHITE, font: FONT_BODY })]
+      }),
     ]
   }
 }
- 
+
 function buildDocument(d) {
   const assetsDir = path.join(__dirname, '..', 'template_assets')
   const coverImg     = fs.readFileSync(path.join(assetsDir, 'cover.jpg'))
   const evertPageImg = fs.readFileSync(path.join(assetsDir, 'evert_page.jpg'))
   const backCoverImg = fs.readFileSync(path.join(assetsDir, 'back_cover.jpg'))
- 
+
   const resumeChildren = [
     p([t('RÉSUMÉ', { size: 72, color: BLUE, font: FONT_TITLE })], { center: true, before: 400, after: 80 }),
     empty(160),
@@ -155,9 +185,9 @@ function buildDocument(d) {
       ], { bullet: true, after: 60 })
     ),
   ]
- 
+
   const expChildren = [sectionTitle('Expériences')]
- 
+
   d.experiences.forEach((exp, idx) => {
     expChildren.push(p([
       t('↗  ', { bold: true, size: 22, color: BLUE }),
@@ -165,34 +195,34 @@ function buildDocument(d) {
       t('– ', { size: 22, color: BLUE }),
       t(exp.role + (exp.stack ? ' ' + exp.stack : ''), { size: 22, color: BLUE, italic: true }),
     ], { before: 240, after: 60 }))
- 
+
     expChildren.push(p([t(exp.dates, { size: 20, color: BLUE, italic: true })], { after: 120 }))
- 
+
     if (exp.projet) {
       expChildren.push(p([t(exp.projet, { size: 20 })], { after: 100 }))
     }
- 
+
     exp.activites?.forEach(act => {
       expChildren.push(p([t(act.theme, { size: 20, bold: false })], { after: 60 }))
       act.points?.forEach(pt =>
         expChildren.push(p([t(pt, { size: 20 })], { bullet: true, after: 40 }))
       )
     })
- 
+
     if (exp.enjeux?.length) {
       expChildren.push(p([t('Enjeux :', { size: 20 })], { after: 60 }))
       exp.enjeux.forEach(e =>
         expChildren.push(p([t(e, { size: 20 })], { bullet: true, after: 40 }))
       )
     }
- 
+
     if (exp.resultats?.length) {
       expChildren.push(p([t('Résultats :', { size: 20 })], { after: 60 }))
       exp.resultats.forEach(r =>
         expChildren.push(p([t(r, { size: 20 })], { bullet: true, after: 40 }))
       )
     }
- 
+
     if (exp.env_technique?.length) {
       expChildren.push(p([
         t('Environnement technique : ', { size: 20, bold: true }),
@@ -200,7 +230,7 @@ function buildDocument(d) {
       ], { before: 100, after: idx < d.experiences.length - 1 ? 200 : 80 }))
     }
   })
- 
+
   const formationChildren = []
   if (d.formations?.length) {
     formationChildren.push(sectionTitle('Formation & Certifications'))
@@ -220,7 +250,7 @@ function buildDocument(d) {
       )
     })
   }
- 
+
   return new Document({
     numbering: {
       config: [{
@@ -250,5 +280,5 @@ function buildDocument(d) {
     ]
   })
 }
- 
+
 module.exports = { buildDocument }
