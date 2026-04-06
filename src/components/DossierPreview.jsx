@@ -1,7 +1,7 @@
 // Parse **gras** en JSX
 function RichText({ text, style = {} }) {
   if (!text) return null
-  const parts = text.split(/(**[^*]+**)/g)
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return (
     <span style={style}>
       {parts.map((part, i) => {
