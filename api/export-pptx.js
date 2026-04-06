@@ -102,82 +102,85 @@ function addExperienceSlide(pres, exp) {
   const slide = pres.addSlide()
   slide.background = { color: LIGHT }
 
-  // Header bleu
+  // Ligne bleue décorative en haut
   slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })
 
-  let y = 0.2
-
-  // Titre expérience
+  // ── Titre + dates : zone séparée car style très différent ──
   slide.addText('↗  ' + exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
-    x: 0.3, y, w: W - 0.5, h: 0.45,
+    x: 0.3, y: 0.12, w: W - 0.5, h: 0.5,
     fontSize: 13, color: BLUE, fontFace: 'Georgia', bold: true, wrap: true
   })
-  y += 0.5
+  slide.addText(exp.dates, {
+    x: 0.3, y: 0.65, w: W - 0.5, h: 0.25,
+    fontSize: 10, color: BLUE, fontFace: 'Calibri', italic: true
+  })
 
-  slide.addText(exp.dates, { x: 0.3, y, w: W - 0.5, h: 0.28, fontSize: 10, color: BLUE, fontFace: 'Calibri', italic: true })
-  y += 0.32
+  // ── Tout le contenu en UNE SEULE zone de texte fluide ──
+  // Comme ça l'utilisateur peut tout modifier/déplacer d'un bloc
+  const runs = []
 
+  const br = () => runs.push({ text: '', options: { breakLine: true, fontSize: 9.5, fontFace: 'Calibri', color: BLACK } })
+  const line = (text, opts = {}) => {
+    runs.push({ text, options: { fontSize: 9.5, fontFace: 'Calibri', color: BLACK, breakLine: true, ...opts } })
+  }
+  const sectionTitle = (text) => {
+    runs.push({ text, options: { fontSize: 10.5, fontFace: 'Calibri', color: BLACK, bold: true, breakLine: true, paraSpaceAfter: 2 } })
+  }
+  const bulletRich = (text, isLast) => {
+    const parts = parseRichText(text, { fontSize: 9.5, color: BLACK, fontFace: 'Calibri' })
+    parts.forEach((p, i) => {
+      const isFirstOfPart = i === 0
+      const isLastOfPart = i === parts.length - 1
+      runs.push({
+        text: p.text,
+        options: {
+          ...p.options,
+          bullet: isFirstOfPart ? true : false,
+          breakLine: isLastOfPart ? true : false,
+        }
+      })
+    })
+  }
+
+  // Projet
   if (exp.projet) {
-    const projRich = parseRichText(exp.projet, { fontSize: 9.5, color: BLACK, fontFace: 'Calibri', italic: true })
-    slide.addText(projRich, { x: 0.3, y, w: W - 0.5, h: 0.38, wrap: true })
-    y += 0.42
+    line(exp.projet, { italic: true, paraSpaceAfter: 4 })
+    br()
   }
 
   // Activités
   exp.activites?.forEach(act => {
-    if (y > H - 1.2) return
-    slide.addText(act.theme, { x: 0.3, y, w: W - 0.5, h: 0.28, fontSize: 10.5, color: BLACK, fontFace: 'Calibri', bold: true })
-    y += 0.3
-    if (act.points?.length) {
-      const pts = act.points.map((pt, i) => {
-        const rich = parseRichText(pt, { fontSize: 9.5, color: BLACK, fontFace: 'Calibri' })
-        // Add bullet + breakLine to first run of each point
-        rich[0].options = { ...rich[0].options, bullet: true, breakLine: i < act.points.length - 1 || rich.length > 1 }
-        return rich
-      }).flat()
-      const h = Math.min(act.points.length * 0.3, 1.4)
-      slide.addText(pts, { x: 0.5, y, w: W - 0.7, h })
-      y += h + 0.05
-    }
+    sectionTitle(act.theme)
+    act.points?.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+    br()
   })
 
   // Enjeux
-  if (exp.enjeux?.length && y < H - 1.0) {
-    slide.addText('Enjeux :', { x: 0.3, y, w: W - 0.5, h: 0.28, fontSize: 10.5, color: BLACK, fontFace: 'Calibri', bold: true })
-    y += 0.3
-    const items = exp.enjeux.map((e, i) => {
-      const rich = parseRichText(e, { fontSize: 9.5, color: BLACK, fontFace: 'Calibri' })
-      rich[0].options = { ...rich[0].options, bullet: true, breakLine: i < exp.enjeux.length - 1 || rich.length > 1 }
-      return rich
-    }).flat()
-    const h = Math.min(exp.enjeux.length * 0.3, 1.0)
-    slide.addText(items, { x: 0.5, y, w: W - 0.7, h })
-    y += h + 0.08
+  if (exp.enjeux?.length) {
+    sectionTitle('Enjeux :')
+    exp.enjeux.forEach((e, i) => bulletRich(e, i === exp.enjeux.length - 1))
+    br()
   }
 
   // Résultats
-  if (exp.resultats?.length && y < H - 1.0) {
-    slide.addText('Résultats :', { x: 0.3, y, w: W - 0.5, h: 0.28, fontSize: 10.5, color: BLACK, fontFace: 'Calibri', bold: true })
-    y += 0.3
-    const items = exp.resultats.map((r, i) => {
-      const rich = parseRichText(r, { fontSize: 9.5, color: BLACK, fontFace: 'Calibri' })
-      rich[0].options = { ...rich[0].options, bullet: true, breakLine: i < exp.resultats.length - 1 || rich.length > 1 }
-      return rich
-    }).flat()
-    const h = Math.min(exp.resultats.length * 0.3, 1.0)
-    slide.addText(items, { x: 0.5, y, w: W - 0.7, h })
-    y += h + 0.08
+  if (exp.resultats?.length) {
+    sectionTitle('Résultats :')
+    exp.resultats.forEach((r, i) => bulletRich(r, i === exp.resultats.length - 1))
+    br()
   }
 
   // Env technique
-  if (exp.env_technique?.length && y < H - 0.4) {
-    slide.addShape('rect', { x: 0.3, y: y + 0.05, w: W - 0.6, h: 0.01, fill: { color: 'dddddd' }, line: { color: 'dddddd' } })
-    y += 0.15
-    slide.addText([
-      { text: 'Environnement technique : ', options: { bold: true, fontSize: 9.5, color: BLACK, fontFace: 'Calibri' } },
-      { text: exp.env_technique.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Calibri' } }
-    ], { x: 0.3, y, w: W - 0.5, h: 0.32 })
+  if (exp.env_technique?.length) {
+    runs.push({ text: 'Environnement technique : ', options: { bold: true, fontSize: 9.5, color: BLACK, fontFace: 'Calibri' } })
+    runs.push({ text: exp.env_technique.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Calibri', breakLine: true } })
   }
+
+  // Une seule addText pour tout le contenu
+  slide.addText(runs, {
+    x: 0.3, y: 0.95,
+    w: W - 0.5, h: H - 1.1,
+    valign: 'top', wrap: true
+  })
 }
 
 function addFormationSlide(pres, d) {
