@@ -90,7 +90,7 @@ function addResumeSlide(pres, d) {
   slide.addText(aproposRuns, { x: 0.4, y, w: W - 0.8, h: 1.9, align: 'left', valign: 'top', wrap: true })
   y += 2.0
 
-  y += 0.4 // espace supplémentaire avant Principales Expériences
+  y += 0.8 // espace x2 avant Principales Expériences
   slide.addText('Principales Expériences', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
   y += 0.38
 
@@ -114,6 +114,7 @@ function addResumeSlide(pres, d) {
   slide.addText(expRuns, { x: 0.5, y, w: W - 0.9, h: 1.1 })
   y += 1.1
 
+  y += 0.4 // espace x2 avant Connaissances Techniques
   slide.addText('Connaissances Techniques', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
   y += 0.55
 
@@ -131,9 +132,14 @@ function addExperienceSlide(pres, exp) {
   // Ligne bleue décorative en haut
   slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })
 
-  // ── Titre + dates : zone séparée car style très différent ──
-  slide.addText('↗  ' + exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
-    x: 0.3, y: 0.52, w: W - 0.5, h: 0.5,
+  // Icône favicon à gauche du titre
+  const iconPath = path.join(process.cwd(), 'template_assets', 'favicon_icon.png')
+  if (fs.existsSync(iconPath)) {
+    slide.addImage({ path: iconPath, x: 0.3, y: 0.58, w: 0.22, h: 0.22 })
+  }
+
+  slide.addText(exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
+    x: 0.6, y: 0.52, w: W - 0.8, h: 0.5,
     fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
   })
   slide.addText(exp.dates, {
@@ -214,26 +220,33 @@ function addFormationSlide(pres, d) {
   const slide = pres.addSlide()
   slide.background = { color: LIGHT }
 
-  let y = 1.5
-  slide.addText('Formation & Certifications', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center', bold: true })
-  y += 0.7
+  // Tout en un seul bloc texte, aligné à gauche
+  const runs = []
+  const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 5, fontFace: 'Montserrat', color: BLUE } })
+
+  // Titre Formation
+  runs.push({ text: 'Formation & Certifications', options: { bold: true, fontSize: 18, color: BLUE, fontFace: 'Playfair Display', breakLine: true, paraSpaceAfter: 14 } })
+  br()
 
   d.formations?.forEach(f => {
-    slide.addText([
-      { text: f.diplome, options: { bold: true, fontSize: 13, color: BLUE, fontFace: 'Montserrat' } },
-      { text: (f.ecole ? ' – ' + f.ecole : '') + (f.annee ? ' (' + f.annee + ')' : ''), options: { bold: false, fontSize: 13, color: BLUE, fontFace: 'Montserrat' } }
-    ], { x: 0.4, y, w: W - 0.8, h: 0.38, align: 'center' })
-    y += 0.45
+    runs.push({ text: f.diplome, options: { bold: true, fontSize: 11, color: BLUE, fontFace: 'Montserrat' } })
+    const rest = (f.ecole ? ' – ' + f.ecole : '') + (f.annee ? ' (' + f.annee + ')' : '')
+    if (rest) runs.push({ text: rest, options: { bold: false, fontSize: 11, color: BLUE, fontFace: 'Montserrat', breakLine: true, paraSpaceAfter: 6 } })
+    else runs.push({ text: '', options: { breakLine: true, fontSize: 11, fontFace: 'Montserrat', paraSpaceAfter: 6 } })
   })
 
-  y += 0.5
-  slide.addText('Langues', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center', bold: true })
-  y += 0.65
+  br()
+  br()
 
-  d.langues?.forEach(l => {
-    slide.addText(`${l.langue} – ${l.niveau}`, { x: 0.4, y, w: W - 0.8, h: 0.35, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', align: 'center' })
-    y += 0.42
+  // Titre Langues
+  runs.push({ text: 'Langues', options: { bold: true, fontSize: 18, color: BLUE, fontFace: 'Playfair Display', breakLine: true, paraSpaceAfter: 14 } })
+  br()
+
+  d.langues?.forEach((l, i) => {
+    runs.push({ text: l.langue + ' – ' + l.niveau, options: { fontSize: 11, color: BLUE, fontFace: 'Montserrat', breakLine: true, paraSpaceAfter: 6 } })
   })
+
+  slide.addText(runs, { x: 0.5, y: 0.8, w: W - 0.8, h: H - 1.2, valign: 'top', wrap: true })
 }
 
 function addFullImageSlide(pres, imgPath) {
