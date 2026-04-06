@@ -110,6 +110,98 @@ function fullPageImageSection(imgBuffer, imgType) {
   }
 }
 
+// Cover: image telle quelle + nom/titre en framePr (texte éditable Word)
+// La cover JPG contient déjà "DOSSIER DE COMPÉTENCES", barre verticale et "Profil"
+// On positionne juste le Prénom (à gauche de la barre) et les expertises (à droite)
+function coverPageSection(imgBuffer, nom, titre, imgType) {
+  // Positions en twips (1 twip = 1/1440 inch)
+  // Page A4: 11906 x 16838 twips
+  // Cover image: 794pt x 1122pt = 15880 x 22440 twips... non, on reste en pt*20
+  // La barre verticale est à ~50% de la largeur = ~5953 twips
+  // "Prénom" : à gauche de la barre, centré verticalement sur ~30% de hauteur
+  // Expertises : à droite de la barre, ~27% et ~33% de hauteur
+
+  // Nom — à gauche de la barre (x~2800), y~30% de 16838 = ~5051
+  const frameNom = createFrameProperties({
+    width: 4500,
+    height: 600,
+    x: 1800,
+    y: 4600,
+    anchor: { horizontal: 'page', vertical: 'page' },
+    wrap: 'none',
+  })
+
+  // Expertise 1 — à droite de la barre (x~6200), y~27% = ~4546
+  const frameExp1 = createFrameProperties({
+    width: 5000,
+    height: 400,
+    x: 6300,
+    y: 4200,
+    anchor: { horizontal: 'page', vertical: 'page' },
+    wrap: 'none',
+  })
+
+  // Expertise 2 — même x, y~33% = ~5556
+  const frameExp2 = createFrameProperties({
+    width: 5000,
+    height: 400,
+    x: 6300,
+    y: 4800,
+    anchor: { horizontal: 'page', vertical: 'page' },
+    wrap: 'none',
+  })
+
+  // Split titre en 1-2 lignes max pour les expertises
+  const parts = titre.split(' / ')
+  const exp1 = parts.slice(0, Math.ceil(parts.length / 2)).join(' / ')
+  const exp2 = parts.slice(Math.ceil(parts.length / 2)).join(' / ')
+
+  const children = [
+    // Image cover (déjà avec "DOSSIER DE COMPÉTENCES", barre, "Profil")
+    new Paragraph({
+      spacing: { before: 0, after: 0 },
+      children: [
+        new ImageRun({
+          data: imgBuffer,
+          transformation: { width: IMG_W, height: IMG_H },
+          type: imgType || 'jpg'
+        })
+      ]
+    }),
+    // Prénom — texte blanc éditable
+    new Paragraph({
+      frameProperties: frameNom,
+      spacing: { before: 0, after: 0 },
+      children: [new TextRun({ text: nom, size: 32, color: WHITE, font: FONT_BODY })]
+    }),
+    // Expertise 1
+    new Paragraph({
+      frameProperties: frameExp1,
+      spacing: { before: 0, after: 0 },
+      children: [
+        new TextRun({ text: '+ ', size: 24, color: WHITE, font: FONT_BODY }),
+        new TextRun({ text: exp1, bold: true, size: 24, color: WHITE, font: FONT_BODY })
+      ]
+    }),
+  ]
+
+  // Expertise 2 seulement si non vide
+  if (exp2) {
+    children.push(
+      new Paragraph({
+        frameProperties: frameExp2,
+        spacing: { before: 0, after: 0 },
+        children: [
+          new TextRun({ text: '+ ', size: 24, color: WHITE, font: FONT_BODY }),
+          new TextRun({ text: exp2, bold: true, size: 24, color: WHITE, font: FONT_BODY })
+        ]
+      })
+    )
+  }
+
+  return { properties: { page: noBorderProps }, children }
+}
+
 function buildDocument(d, coverImgBuffer) {
   const assetsDir = path.join(__dirname, '..', 'template_assets')
   const evertPageImg = fs.readFileSync(path.join(assetsDir, 'evert_page.jpg'))
@@ -228,20 +320,8 @@ function buildDocument(d, coverImgBuffer) {
       }]
     },
     sections: [
-      // Page 1 : cover image Sharp (visuel)
-      fullPageImageSection(coverImgBuffer, 'jpg'),
-
-      // Page 2 : nom + titre modifiables en texte Word
-      {
-        properties: { page: pageProps },
-        children: [
-          empty(2400),
-          p([t('DOSSIER DE COMPÉTENCES', { size: 18, color: BLUE, font: FONT_BODY })], { center: true, after: 120 }),
-          empty(80),
-          p([t(d.nom, { size: 44, bold: true, color: BLUE, font: FONT_TITLE })], { center: true, after: 80 }),
-          p([t(d.titre, { size: 24, bold: true, color: BLUE, font: FONT_BODY })], { center: true, after: 80 }),
-        ]
-      },
+      // Page 1 : cover + nom/titre éditables superposés
+      coverPageSection(coverImgBuffer, d.nom, d.titre, 'jpg'),
 
       // Résumé
       { properties: { page: pageProps }, children: resumeChildren },
