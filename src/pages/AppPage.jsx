@@ -488,18 +488,8 @@ export default function AppPage() {
                   ← Nouveau dossier
                 </button>
 
-                {/* Export Word */}
-                <button
-                  onClick={exportDocx}
-                  style={{
-                    padding: '9px 16px', borderRadius: 8, border: '1.5px solid #e0e0f0',
-                    background: 'transparent', cursor: 'pointer',
-                    fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
-                    color: '#333', display: 'flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  📥 Télécharger Word
-                </button>
+                {/* Export Word — désactivé temporairement, feature conservée */}
+                {/* <button onClick={exportDocx} style={{ padding: '9px 16px', borderRadius: 8, border: '1.5px solid #e0e0f0', background: 'transparent', cursor: 'pointer', fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600, color: '#333', display: 'flex', alignItems: 'center', gap: 6 }}>📥 Télécharger Word</button> */
 
                 {/* Export Google Slides */}
                 <button
@@ -527,7 +517,7 @@ export default function AppPage() {
                       display: 'flex', alignItems: 'center', gap: 6
                     }}
                   >
-                    ✓ Ouvrir dans Google Drive
+                    ✓ Ouvrir dans Google Drive (Slides)
                   </a>
                 ) : (
                   <button
@@ -542,7 +532,7 @@ export default function AppPage() {
                       display: 'flex', alignItems: 'center', gap: 6
                     }}
                   >
-                    {saving ? '⏳ Sauvegarde...' : '☁️ Sauvegarder dans Drive'}
+                    {saving ? '⏳ Sauvegarde...' : '☁️ Sauvegarder Slides dans Drive'}
                   </button>
                 )}
               </div>
