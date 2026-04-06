@@ -114,6 +114,28 @@ export default function AppPage() {
     }
   }
 
+  const exportPptx = async () => {
+    if (!dossier) return
+    try {
+      const response = await fetch('/api/export-pptx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dossier })
+      })
+      if (!response.ok) throw new Error('Erreur export')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Dossier_EverT_${dossier.nom.replace(/\s+/g, '_')}.pptx`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Fichier Google Slides téléchargé !')
+    } catch (err) {
+      toast.error('Erreur export : ' + err.message)
+    }
+  }
+
   const saveToDrive = async () => {
     if (!dossier) return
     setSaving(true)
@@ -469,6 +491,19 @@ export default function AppPage() {
                   }}
                 >
                   📥 Télécharger Word
+                </button>
+
+                {/* Export Google Slides */}
+                <button
+                  onClick={exportPptx}
+                  style={{
+                    padding: '9px 16px', borderRadius: 8, border: '1px solid #1400FF',
+                    background: 'transparent', cursor: 'pointer',
+                    fontFamily: 'DM Sans, sans-serif', fontSize: 13, fontWeight: 500,
+                    color: '#1400FF', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  📊 Télécharger Google Slides
                 </button>
 
                 {/* Save to Drive */}

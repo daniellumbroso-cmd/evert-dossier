@@ -5,6 +5,7 @@
     "formidable": "^3.5.1",
     "google-auth-library": "^9.11.0",
     "googleapis": "^140.0.0",
+    "pptxgenjs": "^4.0.1",
     "sharp": "^0.33.0"
   }
 }
