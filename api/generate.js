@@ -224,9 +224,11 @@ export default async function handler(req, res) {
         const lastBrace = rawPush.lastIndexOf('}')
         if (firstBrace === -1 || lastBrace === -1) throw new Error('Pas de JSON trouvé dans la réponse')
         const cleanedPush = rawPush.substring(firstBrace, lastBrace + 1)
+        console.log('CLEANED PUSH (200 chars):', JSON.stringify(cleanedPush.substring(0, 200)))
         const result = JSON.parse(cleanedPush)
         return res.json({ success: true, objet: result.objet, corps: result.corps })
       } catch (e) {
+        console.log('PUSH PARSE ERROR:', e.message, '| RAW (300):', JSON.stringify(rawPush?.substring(0, 300)))
         return res.status(500).json({ error: 'Erreur génération push : ' + e.message })
       } finally {
         if (prospectPdfFile) { try { fs.unlinkSync(prospectPdfFile.filepath) } catch {} }
