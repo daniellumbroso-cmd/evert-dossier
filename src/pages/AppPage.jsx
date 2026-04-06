@@ -35,6 +35,9 @@ export default function AppPage() {
   const [pushResult, setPushResult] = useState(null)
   const [copiedObjet, setCopiedObjet] = useState(false)
   const [copiedCorps, setCopiedCorps] = useState(false)
+  const [prospectInfoUpload, setProspectInfoUpload] = useState('')
+  const [prospectPdfUpload, setProspectPdfUpload] = useState(null)
+  const [pushReady, setPushReady] = useState(false)
 
   const onDrop = useCallback(acceptedFiles => {
     const file = acceptedFiles[0]
@@ -62,9 +65,17 @@ export default function AppPage() {
     setLoading(true)
     setDossier(null)
     setSavedUrl(null)
+    setPushResult(null)
+    setPushReady(false)
     setCurrentStep(0)
 
     const stepsPromise = simulateSteps()
+
+    // Lancer le push en parallèle (avec ou sans prospect)
+    const pushFormData = new FormData()
+    pushFormData.append('mode', 'push')
+    if (prospectInfoUpload) pushFormData.append('prospectInfo', prospectInfoUpload)
+    if (prospectPdfUpload) pushFormData.append('prospectPdf', prospectPdfUpload)
 
     try {
       const formData = new FormData()
@@ -90,6 +101,20 @@ export default function AppPage() {
       setDossier(data.dossier)
       setCurrentStep(STEPS.length)
       toast.success('Dossier généré !')
+
+      // Maintenant qu'on a le dossier, lancer le push
+      pushFormData.append('dossier', JSON.stringify(data.dossier))
+      fetch('/api/generate', { method: 'POST', body: pushFormData })
+        .then(r => r.json())
+        .then(pushData => {
+          if (pushData.success) {
+            setPushResult(pushData)
+            setPushReady(true)
+            toast.success('Mail push prêt !')
+          }
+        })
+        .catch(() => {})
+
     } catch (err) {
       toast.error(err.message)
       setCurrentStep(-1)
@@ -213,6 +238,9 @@ export default function AppPage() {
     setProspectInfo('')
     setProspectPdf(null)
     setPushResult(null)
+    setPushReady(false)
+    setProspectInfoUpload('')
+    setProspectPdfUpload(null)
   }
 
   const BLUE = '#1400FF'
@@ -445,6 +473,37 @@ export default function AppPage() {
                 </div>
               </div>
 
+              {/* Section Prospect */}
+              <div style={{ background: '#fafaff', border: '1.5px solid #e8e8f0', borderRadius: 12, padding: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#1400FF', fontFamily: 'Montserrat, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    ✉️ Prospect (optionnel)
+                  </span>
+                  <span style={{ fontSize: 11, color: '#888', fontFamily: 'Montserrat, sans-serif' }}>Mail push généré automatiquement</span>
+                </div>
+                <textarea
+                  value={prospectInfoUpload}
+                  onChange={e => setProspectInfoUpload(e.target.value)}
+                  placeholder="Sans prospect : mail générique&#10;Avec prospect : nom, poste, entreprise, contexte équipe..."
+                  style={{ width: '100%', minHeight: 65, padding: '8px 12px', border: '1.5px solid #e0e0e0', borderRadius: 8, resize: 'vertical', fontFamily: 'Montserrat, sans-serif', fontSize: 12, lineHeight: 1.5, color: '#111', background: '#fff', outline: 'none', boxSizing: 'border-box' }}
+                  onFocus={e => e.target.style.borderColor = '#1400FF'}
+                  onBlur={e => e.target.style.borderColor = '#e0e0e0'}
+                />
+                <div style={{ marginTop: 6 }}>
+                  {prospectPdfUpload ? (
+                    <span style={{ fontSize: 11, color: '#1400FF', fontFamily: 'Montserrat, sans-serif' }}>
+                      📎 {prospectPdfUpload.name}
+                      <button onClick={() => setProspectPdfUpload(null)} style={{ marginLeft: 6, fontSize: 11, color: '#888', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                    </span>
+                  ) : (
+                    <label style={{ fontSize: 11, color: '#888', fontFamily: 'Montserrat, sans-serif', cursor: 'pointer', textDecoration: 'underline' }}>
+                      + PDF LinkedIn prospect
+                      <input type="file" accept="application/pdf" style={{ display: 'none' }} onChange={e => setProspectPdfUpload(e.target.files[0])} />
+                    </label>
+                  )}
+                </div>
+              </div>
+
               {/* Generate button */}
               <button
                 onClick={generate}
@@ -582,19 +641,33 @@ export default function AppPage() {
                     {saving ? '⏳ Sauvegarde...' : '☁️ Sauvegarder Slides dans Drive'}
                   </button>
                 )}
-                {/* Bouton Mail Push */}
+                {/* Bouton Mail Push avec badge */}
                 <button
-                  onClick={() => { setShowPushPanel(!showPushPanel); setPushResult(null) }}
+                  onClick={() => { setShowPushPanel(!showPushPanel) }}
                   style={{
-                    padding: '9px 16px', borderRadius: 8, border: '1.5px solid #e0e0f0',
-                    background: showPushPanel ? '#f0f0ff' : 'transparent',
+                    padding: '9px 16px', borderRadius: 8, border: pushReady ? '1.5px solid #1400FF' : '1.5px solid #e0e0f0',
+                    background: showPushPanel ? '#f0f0ff' : pushReady ? '#f0f0ff' : 'transparent',
                     cursor: 'pointer',
                     fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
-                    color: showPushPanel ? '#1400FF' : '#555',
-                    display: 'flex', alignItems: 'center', gap: 6
+                    color: showPushPanel || pushReady ? '#1400FF' : '#555',
+                    display: 'flex', alignItems: 'center', gap: 6, position: 'relative'
                   }}
                 >
                   ✉️ Mail Push
+                  {pushReady && (
+                    <span style={{
+                      background: '#1400FF', color: '#fff', borderRadius: 10,
+                      fontSize: 9, fontWeight: 700, padding: '2px 6px',
+                      fontFamily: 'Montserrat, sans-serif', letterSpacing: '0.05em'
+                    }}>PRÊT</span>
+                  )}
+                  {!pushReady && loading && (
+                    <span style={{
+                      background: '#e0e0f0', color: '#888', borderRadius: 10,
+                      fontSize: 9, fontWeight: 700, padding: '2px 6px',
+                      fontFamily: 'Montserrat, sans-serif'
+                    }}>...</span>
+                  )}
                 </button>
               </div>
             </div>

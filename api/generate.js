@@ -212,7 +212,7 @@ export default async function handler(req, res) {
         const base64 = pdfBuffer.toString('base64')
         pushMessages = [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }, { type: 'text', text: `Génère un mail push dossier ever"T.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\nPROFIL PROSPECT : voir PDF ci-joint.${prospectInfo ? '\nINFO COMPLÉMENTAIRE : ' + prospectInfo : ''}` }] }]
       } else {
-        pushMessages = [{ role: 'user', content: `Génère un mail push dossier ever"T.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\nPROFIL PROSPECT :\n${prospectInfo || 'Non renseigné'}` }]
+        pushMessages = [{ role: 'user', content: `Génère un mail push dossier everT.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\n${prospectInfo ? 'PROFIL PROSPECT (cibler ce contexte précis) :\n' + prospectInfo : 'PAS DE PROSPECT SPÉCIFIQUE : génère un mail push générique percutant, sans destinataire nommé, avec une formule ouverte type "Cher(e) [Prénom]," — le mail sera personnalisé manuellement ensuite.'}` }]
       }
 
       let rawPush = ''
