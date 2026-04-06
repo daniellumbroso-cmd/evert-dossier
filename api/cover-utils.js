@@ -1,44 +1,52 @@
 import sharp from 'sharp'
 import path from 'path'
 
-// Génère la cover avec nom + expertises gravés via Sharp SVG overlay
 export async function generateCoverWithText(nom, titre) {
   const assetsDir = path.join(process.cwd(), 'template_assets')
   const coverPath = path.join(assetsDir, 'cover.jpg')
 
-  // Split titre en 1-2 lignes d'expertises
+  // Split titre en 1-2 expertises
   const parts = titre.split(' / ')
   const mid = Math.ceil(parts.length / 2)
   const exp1 = parts.slice(0, mid).join(' / ')
   const exp2 = parts.slice(mid).join(' / ')
 
-  // Positions calées sur la cover (1240x1754px)
-  // Barre verticale blanche à x≈620
-  // "Profil" dans l'image à y≈280
+  // Positions sur la cover 1240x1754px
+  // Barre blanche x≈620, "Profil" y≈280
   const bar_x = 620
   const y_profil = 280
   const line_h = 35
 
-  const prenom_x = bar_x - 20
+  // Prénom : à gauche de la barre, aligné à droite → calcul manuel de x
+  // On place le texte à x=100 avec largeur fixe à gauche de la barre
+  const prenom_x = 100
   const prenom_y = y_profil + Math.round(line_h * 2.5)
   const exp_x = bar_x + 30
   const exp1_y = y_profil + 55 + line_h
   const exp2_y = y_profil + 105 + line_h
 
-  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Encode pour SVG XML (pas d'attributs spéciaux, juste escape)
+  const esc = s => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 
-  const svg = `<svg width="1240" height="1754" xmlns="http://www.w3.org/2000/svg">
+  const nomSafe = esc(nom)
+  const exp1Safe = esc(exp1)
+  const exp2Safe = exp2 ? esc(exp2) : ''
+
+  const svg = Buffer.from(`<svg width="1240" height="1754" xmlns="http://www.w3.org/2000/svg">
     <text x="${prenom_x}" y="${prenom_y}"
-      font-family="Arial, sans-serif" font-size="30" fill="white"
-      text-anchor="end">${esc(nom)}</text>
+      font-family="sans-serif" font-size="32" fill="white">${nomSafe}</text>
     <text x="${exp_x}" y="${exp1_y}"
-      font-family="Arial, sans-serif" font-size="26" font-weight="bold" fill="white">+ ${esc(exp1)}</text>
-    ${exp2 ? `<text x="${exp_x}" y="${exp2_y}"
-      font-family="Arial, sans-serif" font-size="26" font-weight="bold" fill="white">+ ${esc(exp2)}</text>` : ''}
-  </svg>`
+      font-family="sans-serif" font-size="26" font-weight="bold" fill="white">+ ${exp1Safe}</text>
+    ${exp2Safe ? `<text x="${exp_x}" y="${exp2_y}"
+      font-family="sans-serif" font-size="26" font-weight="bold" fill="white">+ ${exp2Safe}</text>` : ''}
+  </svg>`)
 
   const coverBuffer = await sharp(coverPath)
-    .composite([{ input: Buffer.from(svg), blend: 'over' }])
+    .composite([{ input: svg, blend: 'over' }])
     .jpeg({ quality: 95 })
     .toBuffer()
 
