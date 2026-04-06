@@ -636,6 +636,9 @@ export default function AppPage() {
                     </label>
                     <div
                       onClick={() => document.getElementById('prospectPdfInput').click()}
+                      onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#1400FF'; e.currentTarget.style.background = '#f0f0ff' }}
+                      onDragLeave={e => { e.currentTarget.style.borderColor = prospectPdf ? '#1400FF' : '#c8c8e8'; e.currentTarget.style.background = prospectPdf ? '#f0f0ff' : '#f8f8ff' }}
+                      onDrop={e => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file && file.type === 'application/pdf') setProspectPdf(file); e.currentTarget.style.borderColor = '#1400FF'; e.currentTarget.style.background = '#f0f0ff' }}
                       style={{
                         border: '2px dashed ' + (prospectPdf ? '#1400FF' : '#c8c8e8'),
                         borderRadius: 10, padding: '1.5rem 1rem', textAlign: 'center',

@@ -193,39 +193,7 @@ export default async function handler(req, res) {
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-    const besoinSection = besoinClient
-      ? `\n\nBESOIN CLIENT (mets en gras les mots-clés correspondants trouvés dans le CV, réordonne les compétences techniques en priorité) :\n${besoinClient}`
-      : ''
-
-    let messages
-
-    if (pdfFile) {
-      const pdfBuffer = fs.readFileSync(pdfFile.filepath)
-      const base64 = pdfBuffer.toString('base64')
-
-      messages = [{
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: base64 }
-          },
-          {
-            type: 'text',
-            text: `Génère le dossier de compétences Ever"T à partir de ce CV PDF.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}`
-          }
-        ]
-      }]
-    } else if (cvText) {
-      messages = [{
-        role: 'user',
-        content: `Génère le dossier de compétences Ever"T à partir de ce CV.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}\n\nCV :\n${cvText}`
-      }]
-    } else {
-      return res.status(400).json({ error: 'Aucun CV fourni' })
-    }
-
-    // ── MODE PUSH : générer le mail prospect ──
+    // ── MODE PUSH : traiter en priorité avant le check CV ──
     if (fields.mode?.[0] === 'push') {
       const dossierJson = fields.dossier?.[0]
       const prospectInfo = fields.prospectInfo?.[0] || ''
@@ -258,6 +226,38 @@ export default async function handler(req, res) {
       } finally {
         if (prospectPdfFile) { try { fs.unlinkSync(prospectPdfFile.filepath) } catch {} }
       }
+    }
+
+    const besoinSection = besoinClient
+      ? `\n\nBESOIN CLIENT (mets en gras les mots-clés correspondants trouvés dans le CV, réordonne les compétences techniques en priorité) :\n${besoinClient}`
+      : ''
+
+    let messages
+
+    if (pdfFile) {
+      const pdfBuffer = fs.readFileSync(pdfFile.filepath)
+      const base64 = pdfBuffer.toString('base64')
+
+      messages = [{
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: base64 }
+          },
+          {
+            type: 'text',
+            text: `Génère le dossier de compétences Ever"T à partir de ce CV PDF.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}`
+          }
+        ]
+      }]
+    } else if (cvText) {
+      messages = [{
+        role: 'user',
+        content: `Génère le dossier de compétences Ever"T à partir de ce CV.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}\n\nCV :\n${cvText}`
+      }]
+    } else {
+      return res.status(400).json({ error: 'Aucun CV fourni' })
     }
 
     // ── MODE NORMAL : générer le dossier ──
