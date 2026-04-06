@@ -32,6 +32,16 @@ FORMAT EXACT du dossier Ever"T :
 4. Formation & Certifications
 5. Langues
 
+RÈGLE DE FUSION DES EXPÉRIENCES :
+Quand un candidat a occupé plusieurs postes consécutifs chez le même employeur ET que les missions sont liées (même domaine technique, même contexte business, progression logique de carrière), tu DOIS les fusionner en une seule expérience avec des sous-rôles.
+- Critères de fusion : même entreprise + périodes consécutives (sans gap) + missions thématiquement proches
+- Critères de NON-fusion : même entreprise mais missions sans lien technique ou business (ex: dev Android puis chef de projet RH)
+- Une expérience fusionnée a un champ "sub_roles" avec 2 ou 3 sous-rôles maximum
+- La durée globale est la somme des deux postes (ex: fév. 2019 – mars 2024)
+- Le titre affiché combine les deux rôles : "Consultant / Senior Consultant Data Analyst"
+- Chaque sous-rôle a ses propres bullets d'activités
+- Les enjeux, résultats et env_technique sont globaux (couvrent toute la période fusionnée)
+
 RÈGLES DE RÉDACTION :
 - À propos toujours à la 3e personne ("Lucas est...", "Mehdi maîtrise...")
 - Phrases actives, percutantes, orientées impact
@@ -72,6 +82,32 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
       "enjeux": ["Enjeu 1", "Enjeu 2"],
       "resultats": ["Résultat 1 chiffré", "Résultat 2"],
       "env_technique": ["dbt", "BigQuery", "Python"]
+    },
+    {
+      "entreprise": "",
+      "role": "Consultant / Senior Consultant Data Analyst",
+      "stack": "",
+      "dates": "fév. 2019 – mars 2024",
+      "projet": "",
+      "sub_roles": [
+        {
+          "titre": "Senior Consultant Data Analyst",
+          "dates": "sept. 2021 – mars 2024",
+          "activites": [
+            {"theme": "Thème senior", "points": ["Point 1", "Point 2"]}
+          ]
+        },
+        {
+          "titre": "Consultant Data Analyst",
+          "dates": "fév. 2019 – sept. 2021",
+          "activites": [
+            {"theme": "Thème consultant", "points": ["Point 1", "Point 2"]}
+          ]
+        }
+      ],
+      "enjeux": ["Enjeu global 1", "Enjeu global 2"],
+      "resultats": ["Résultat global 1", "Résultat global 2"],
+      "env_technique": ["Python", "SQL", "Power BI"]
     }
   ],
   "formations": [
