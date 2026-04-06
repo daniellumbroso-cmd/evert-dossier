@@ -133,11 +133,11 @@ function addExperienceSlide(pres, exp) {
 
   // ── Titre + dates : zone séparée car style très différent ──
   slide.addText('↗  ' + exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
-    x: 0.3, y: 0.12, w: W - 0.5, h: 0.5,
+    x: 0.3, y: 0.52, w: W - 0.5, h: 0.5,
     fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, wrap: true
   })
   slide.addText(exp.dates, {
-    x: 0.3, y: 0.65, w: W - 0.5, h: 0.25,
+    x: 0.3, y: 1.05, w: W - 0.5, h: 0.25,
     fontSize: 10, color: BLUE, fontFace: 'Montserrat', italic: true
   })
 
@@ -204,8 +204,8 @@ function addExperienceSlide(pres, exp) {
 
   // Une seule addText pour tout le contenu
   slide.addText(runs, {
-    x: 0.3, y: 1.3,
-    w: W - 0.5, h: H - 1.45,
+    x: 0.3, y: 1.7,
+    w: W - 0.5, h: H - 1.85,
     valign: 'top', wrap: true
   })
 }
