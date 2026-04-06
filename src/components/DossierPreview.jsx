@@ -1,3 +1,19 @@
+// Parse **gras** en JSX
+function RichText({ text, style = {} }) {
+  if (!text) return null
+  const parts = text.split(/(**[^*]+**)/g)
+  return (
+    <span style={style}>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>
+        }
+        return <span key={i}>{part}</span>
+      })}
+    </span>
+  )
+}
+
 export default function DossierPreview({ dossier: d }) {
   const s = {
     page: {
@@ -61,7 +77,9 @@ export default function DossierPreview({ dossier: d }) {
         <div style={{ marginBottom: '1.25rem' }}>
           <p style={s.subTitle}>À propos</p>
           {d.a_propos.split('\n\n').map((para, i) => (
-            <p key={i} style={{ margin: '0 0 10px', fontSize: 13, lineHeight: 1.7 }}>{para}</p>
+            <p key={i} style={{ margin: '0 0 10px', fontSize: 13, lineHeight: 1.7 }}>
+              <RichText text={para} />
+            </p>
           ))}
         </div>
       )}

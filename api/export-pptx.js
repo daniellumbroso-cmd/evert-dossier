@@ -135,11 +135,11 @@ function addExperienceSlide(pres, exp) {
   // Icône favicon à gauche du titre
   const iconPath = path.join(process.cwd(), 'template_assets', 'favicon_icon.png')
   if (fs.existsSync(iconPath)) {
-    slide.addImage({ path: iconPath, x: 0.3, y: 0.58, w: 0.22, h: 0.22 })
+    slide.addImage({ path: iconPath, x: 0.32, y: 0.57, w: 0.28, h: 0.28 })
   }
 
   slide.addText(exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
-    x: 0.6, y: 0.52, w: W - 0.8, h: 0.5,
+    x: 0.72, y: 0.52, w: W - 0.9, h: 0.5,
     fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
   })
   slide.addText(exp.dates, {
@@ -231,8 +231,8 @@ function addFormationSlide(pres, d) {
   d.formations?.forEach(f => {
     runs.push({ text: f.diplome, options: { bold: true, fontSize: 11, color: BLUE, fontFace: 'Montserrat' } })
     const rest = (f.ecole ? ' – ' + f.ecole : '') + (f.annee ? ' (' + f.annee + ')' : '')
-    if (rest) runs.push({ text: rest, options: { bold: false, fontSize: 11, color: BLUE, fontFace: 'Montserrat', breakLine: true, paraSpaceAfter: 6 } })
-    else runs.push({ text: '', options: { breakLine: true, fontSize: 11, fontFace: 'Montserrat', paraSpaceAfter: 6 } })
+    if (rest) runs.push({ text: rest, options: { bold: false, fontSize: 11, color: BLUE, fontFace: 'Montserrat', breakLine: true, paraSpaceAfter: 14 } })
+    else runs.push({ text: '', options: { breakLine: true, fontSize: 11, fontFace: 'Montserrat', paraSpaceAfter: 14 } })
   })
 
   br()
