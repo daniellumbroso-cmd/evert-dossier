@@ -231,6 +231,18 @@ function buildDocument(d, coverImgBuffer) {
       // Page 1 : cover image Sharp (visuel)
       fullPageImageSection(coverImgBuffer, 'jpg'),
 
+      // Page 2 : nom + titre modifiables en texte Word
+      {
+        properties: { page: pageProps },
+        children: [
+          empty(2400),
+          p([t('DOSSIER DE COMPÉTENCES', { size: 18, color: BLUE, font: FONT_BODY })], { center: true, after: 120 }),
+          empty(80),
+          p([t(d.nom, { size: 44, bold: true, color: BLUE, font: FONT_TITLE })], { center: true, after: 80 }),
+          p([t(d.titre, { size: 24, bold: true, color: BLUE, font: FONT_BODY })], { center: true, after: 80 }),
+        ]
+      },
+
       // Résumé
       { properties: { page: pageProps }, children: resumeChildren },
       // Expériences
