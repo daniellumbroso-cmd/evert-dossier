@@ -118,6 +118,62 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
   ]
 }`
 
+
+// ── INFOS EXPÉDITEUR pour le mode push ──
+function getSenderInfo(email) {
+  if (email === 'daniel.lumbroso@ever-t.fr') {
+    return { nom: 'Daniel Lumbroso', role: 'Fondateur', signature: 'Daniel' }
+  }
+  if (email === 'quentin.branchet@ever-t.fr') {
+    return { nom: 'Quentin Branchet', role: 'Co-fondateur', signature: 'Quentin' }
+  }
+  const prenom = email.split('.')[0]
+  const p = prenom.charAt(0).toUpperCase() + prenom.slice(1)
+  return { nom: p, role: 'Business Developer', signature: p }
+}
+
+const PUSH_PROMPT = `Tu es un expert en rédaction de mails de prospection commerciale pour ever"T, une ESN tech IA-native, filiale Product & data.iA de WOLD | EDG, avec +160 ingénieurs.
+
+Tu génères des mails "push dossier" : emails courts et percutants envoyés à des prospects LinkedIn pour présenter un consultant ever"T.
+
+STRUCTURE EXACTE :
+
+OBJET : ever"T [référencé NOM_CLIENT_SI_CONNU] | Dossier [Métier principal] | [Prénom(s) candidat(s)]
+→ Si pas de référencement connu : ever"T - Groupe Wold | Dossier [Métier] | [Prénom(s)]
+
+CORPS :
+Cher/Chère [Prénom prospect],
+J'espère que vous allez bien.
+
+Je suis [NOM_EXPEDITEUR], [ROLE] d'ever"T | Groupe Wold : société d'innovation spécialisée en [domaine pertinent] de +160 ingénieurs.
+
+[Prénom candidat], un de nos [profil] spécialisé[s] en [stack principale], nous a exprimé son souhait de rejoindre [Entreprise prospect].
+
+Ses points forts :
+• Point fort 1 (le plus impactant pour CE prospect)
+• Point fort 2
+• Point fort 3
+• Point fort 4
+• Point fort 5 max
+
+Je suis disponible pour organiser un échange [timing]. Qu'en pensez-vous ?
+
+Je vous souhaite une très belle journée,
+[SIGNATURE]
+
+RÈGLES :
+- Mail court et dense, chaque bullet = valeur concrète pour LE prospect
+- Points forts matchés avec le contexte du prospect
+- Jamais d'invention — uniquement ce qui est dans le dossier
+- Ton professionnel, direct, légèrement chaleureux
+- "nous a exprimé son souhait de rejoindre X" = formule clé à conserver
+
+RÉPONDS UNIQUEMENT EN JSON valide, sans backticks :
+{
+  "objet": "Objet du mail complet",
+  "corps": "Corps du mail complet avec sauts de ligne \\n"
+}`
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
@@ -169,6 +225,42 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Aucun CV fourni' })
     }
 
+    // ── MODE PUSH : générer le mail prospect ──
+    if (fields.mode?.[0] === 'push') {
+      const dossierJson = fields.dossier?.[0]
+      const prospectInfo = fields.prospectInfo?.[0] || ''
+      const prospectPdfFile = files.prospectPdf?.[0]
+      if (!dossierJson) return res.status(400).json({ error: 'Dossier manquant' })
+      let dossierData
+      try { dossierData = JSON.parse(dossierJson) } catch { return res.status(400).json({ error: 'JSON invalide' }) }
+
+      const sender = getSenderInfo(session.email)
+      const candidatSummary = `NOM : ${dossierData.nom}\nTITRE : ${dossierData.titre}\nCOMPÉTENCES : ${dossierData.competences_techniques?.map(c => c.categorie + ': ' + c.items.slice(0, 5).join(', ')).join(' | ')}\nEXPÉRIENCES : ${dossierData.principales_experiences?.map(e => e.entreprise + ' — ' + e.role + ' (' + e.dates + ')').join(' | ')}\nRÉSUMÉ : ${dossierData.a_propos?.substring(0, 400)}`
+      const senderInfo = `EXPÉDITEUR : ${sender.nom} (${sender.role})\nSIGNATURE : ${sender.signature}`
+
+      let pushMessages
+      if (prospectPdfFile) {
+        const pdfBuffer = fs.readFileSync(prospectPdfFile.filepath)
+        const base64 = pdfBuffer.toString('base64')
+        pushMessages = [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }, { type: 'text', text: `Génère un mail push dossier ever"T.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\nPROFIL PROSPECT : voir PDF ci-joint.${prospectInfo ? '\nINFO COMPLÉMENTAIRE : ' + prospectInfo : ''}` }] }]
+      } else {
+        pushMessages = [{ role: 'user', content: `Génère un mail push dossier ever"T.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\nPROFIL PROSPECT :\n${prospectInfo || 'Non renseigné'}` }]
+      }
+
+      try {
+        const pushResponse = await anthropic.messages.create({ model: 'claude-opus-4-5', max_tokens: 1500, system: PUSH_PROMPT, messages: pushMessages })
+        const rawPush = pushResponse.content.map(b => b.text || '').join('')
+        const cleanedPush = rawPush.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+        const result = JSON.parse(cleanedPush)
+        return res.json({ success: true, objet: result.objet, corps: result.corps })
+      } catch (e) {
+        return res.status(500).json({ error: 'Erreur génération push : ' + e.message })
+      } finally {
+        if (prospectPdfFile) { try { fs.unlinkSync(prospectPdfFile.filepath) } catch {} }
+      }
+    }
+
+    // ── MODE NORMAL : générer le dossier ──
     try {
       const response = await anthropic.messages.create({
         model: 'claude-opus-4-5',

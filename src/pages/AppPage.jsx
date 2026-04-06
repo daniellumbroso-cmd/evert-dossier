@@ -173,11 +173,12 @@ export default function AppPage() {
     setPushResult(null)
     try {
       const formData = new FormData()
+      formData.append('mode', 'push')
       formData.append('dossier', JSON.stringify(dossier))
       if (prospectInfo) formData.append('prospectInfo', prospectInfo)
       if (prospectPdf) formData.append('prospectPdf', prospectPdf)
 
-      const response = await fetch('/api/generate-push', {
+      const response = await fetch('/api/generate', {
         method: 'POST',
         body: formData
       })
