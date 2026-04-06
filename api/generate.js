@@ -215,20 +215,18 @@ export default async function handler(req, res) {
         pushMessages = [{ role: 'user', content: `Génère un mail push dossier ever"T.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\nPROFIL PROSPECT :\n${prospectInfo || 'Non renseigné'}` }]
       }
 
+      let rawPush = ''
       try {
         const pushResponse = await anthropic.messages.create({ model: 'claude-opus-4-5', max_tokens: 1500, system: PUSH_PROMPT, messages: pushMessages })
-        const rawPush = pushResponse.content.map(b => b.text || '').join('')
-        console.log('RAW PUSH RESPONSE:', JSON.stringify(rawPush.substring(0, 500)))
-        // Extraire le JSON : chercher le premier { et le dernier }
+        rawPush = pushResponse.content.map(b => b.text || '').join('')
         const firstBrace = rawPush.indexOf('{')
         const lastBrace = rawPush.lastIndexOf('}')
         if (firstBrace === -1 || lastBrace === -1) throw new Error('Pas de JSON trouvé dans la réponse')
         const cleanedPush = rawPush.substring(firstBrace, lastBrace + 1)
-        console.log('CLEANED PUSH (200 chars):', JSON.stringify(cleanedPush.substring(0, 200)))
         const result = JSON.parse(cleanedPush)
         return res.json({ success: true, objet: result.objet, corps: result.corps })
       } catch (e) {
-        console.log('PUSH PARSE ERROR:', e.message, '| RAW (300):', JSON.stringify(rawPush?.substring(0, 300)))
+        console.log('PUSH ERROR:', e.message, '| RAW:', JSON.stringify(rawPush.substring(0, 300)))
         return res.status(500).json({ error: 'Erreur génération push : ' + e.message })
       } finally {
         if (prospectPdfFile) { try { fs.unlinkSync(prospectPdfFile.filepath) } catch {} }
