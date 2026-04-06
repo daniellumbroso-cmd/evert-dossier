@@ -223,8 +223,8 @@ export default async function handler(req, res) {
         const lastBrace = rawPush.lastIndexOf('}')
         if (firstBrace === -1 || lastBrace === -1) throw new Error('Pas de JSON trouvé dans la réponse')
         let cleanedPush = rawPush.substring(firstBrace, lastBrace + 1)
-        // Sanitize : remplacer ever"T par ever\"T pour éviter les guillemets non échappés
-        // puis tenter le parse ; si échec, tenter avec relaxed parsing
+        // Fix : le guillemet dans ever"T casse le JSON — on l'échappe avant parsing
+        cleanedPush = cleanedPush.replace(/ever"T/g, 'everT')
         let result
         try {
           result = JSON.parse(cleanedPush)
