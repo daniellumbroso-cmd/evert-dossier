@@ -218,6 +218,7 @@ export default async function handler(req, res) {
       try {
         const pushResponse = await anthropic.messages.create({ model: 'claude-opus-4-5', max_tokens: 1500, system: PUSH_PROMPT, messages: pushMessages })
         const rawPush = pushResponse.content.map(b => b.text || '').join('')
+        console.log('RAW PUSH RESPONSE:', JSON.stringify(rawPush.substring(0, 500)))
         // Nettoyage robuste : extraire le JSON même si Claude ajoute du texte autour
         let cleanedPush = rawPush
           .replace(/```json\n?/g, '').replace(/```\n?/g, '')  // backticks
