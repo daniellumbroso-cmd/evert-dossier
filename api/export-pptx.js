@@ -215,7 +215,7 @@ function addFormationSlide(pres, d) {
   slide.background = { color: LIGHT }
 
   let y = 1.5
-  slide.addText('Formation & Certifications', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center' })
+  slide.addText('Formation & Certifications', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center', bold: true })
   y += 0.7
 
   d.formations?.forEach(f => {
@@ -226,7 +226,7 @@ function addFormationSlide(pres, d) {
   })
 
   y += 0.5
-  slide.addText('Langues', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center' })
+  slide.addText('Langues', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center', bold: true })
   y += 0.65
 
   d.langues?.forEach(l => {
