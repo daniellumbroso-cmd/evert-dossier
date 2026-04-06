@@ -134,7 +134,7 @@ function addExperienceSlide(pres, exp) {
   // ── Titre + dates : zone séparée car style très différent ──
   slide.addText('↗  ' + exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
     x: 0.3, y: 0.52, w: W - 0.5, h: 0.5,
-    fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, wrap: true
+    fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
   })
   slide.addText(exp.dates, {
     x: 0.3, y: 1.05, w: W - 0.5, h: 0.25,
@@ -219,9 +219,10 @@ function addFormationSlide(pres, d) {
   y += 0.7
 
   d.formations?.forEach(f => {
-    slide.addText(`${f.diplome}${f.ecole ? ' – ' + f.ecole : ''}${f.annee ? ' (' + f.annee + ')' : ''}`, {
-      x: 0.4, y, w: W - 0.8, h: 0.38, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', align: 'center'
-    })
+    slide.addText([
+      { text: f.diplome, options: { bold: true, fontSize: 13, color: BLUE, fontFace: 'Montserrat' } },
+      { text: (f.ecole ? ' – ' + f.ecole : '') + (f.annee ? ' (' + f.annee + ')' : ''), options: { bold: false, fontSize: 13, color: BLUE, fontFace: 'Montserrat' } }
+    ], { x: 0.4, y, w: W - 0.8, h: 0.38, align: 'center' })
     y += 0.45
   })
 
