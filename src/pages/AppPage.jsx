@@ -28,6 +28,13 @@ export default function AppPage() {
   const [dossier, setDossier] = useState(null)
   const [saving, setSaving] = useState(false)
   const [savedUrl, setSavedUrl] = useState(null)
+  const [showPushPanel, setShowPushPanel] = useState(false)
+  const [prospectInfo, setProspectInfo] = useState('')
+  const [prospectPdf, setProspectPdf] = useState(null)
+  const [generatingPush, setGeneratingPush] = useState(false)
+  const [pushResult, setPushResult] = useState(null)
+  const [copiedObjet, setCopiedObjet] = useState(false)
+  const [copiedCorps, setCopiedCorps] = useState(false)
 
   const onDrop = useCallback(acceptedFiles => {
     const file = acceptedFiles[0]
@@ -159,6 +166,41 @@ export default function AppPage() {
     }
   }
 
+  const generatePush = async () => {
+    if (!dossier) return
+    if (!prospectInfo.trim() && !prospectPdf) return toast.error('Renseignez le profil du prospect')
+    setGeneratingPush(true)
+    setPushResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('dossier', JSON.stringify(dossier))
+      if (prospectInfo) formData.append('prospectInfo', prospectInfo)
+      if (prospectPdf) formData.append('prospectPdf', prospectPdf)
+
+      const response = await fetch('/api/generate-push', {
+        method: 'POST',
+        body: formData
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Erreur serveur')
+      }
+      const data = await response.json()
+      setPushResult(data)
+      toast.success('Mail push généré !')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setGeneratingPush(false)
+    }
+  }
+
+  const copyToClipboard = async (text, type) => {
+    await navigator.clipboard.writeText(text)
+    if (type === 'objet') { setCopiedObjet(true); setTimeout(() => setCopiedObjet(false), 2000) }
+    if (type === 'corps') { setCopiedCorps(true); setTimeout(() => setCopiedCorps(false), 2000) }
+  }
+
   const reset = () => {
     setPdfFile(null)
     setCvText('')
@@ -166,6 +208,10 @@ export default function AppPage() {
     setDossier(null)
     setSavedUrl(null)
     setCurrentStep(-1)
+    setShowPushPanel(false)
+    setProspectInfo('')
+    setProspectPdf(null)
+    setPushResult(null)
   }
 
   const BLUE = '#1400FF'
@@ -535,8 +581,127 @@ export default function AppPage() {
                     {saving ? '⏳ Sauvegarde...' : '☁️ Sauvegarder Slides dans Drive'}
                   </button>
                 )}
+                {/* Bouton Mail Push */}
+                <button
+                  onClick={() => { setShowPushPanel(!showPushPanel); setPushResult(null) }}
+                  style={{
+                    padding: '9px 16px', borderRadius: 8, border: '1.5px solid #e0e0f0',
+                    background: showPushPanel ? '#f0f0ff' : 'transparent',
+                    cursor: 'pointer',
+                    fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
+                    color: showPushPanel ? '#1400FF' : '#555',
+                    display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  ✉️ Mail Push
+                </button>
               </div>
             </div>
+
+            {/* Panneau Mail Push */}
+            {showPushPanel && (
+              <div style={{
+                background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 16,
+                padding: '1.5rem', marginBottom: '1.5rem',
+                boxShadow: '0 2px 12px rgba(20,0,255,0.04)'
+              }}>
+                <h3 style={{ fontFamily: 'Montserrat', fontWeight: 700, fontSize: 14, color: '#1400FF', margin: '0 0 1rem' }}>
+                  ✉️ Générer le mail Push Dossier
+                </h3>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#1400FF', marginBottom: 6, fontFamily: 'Montserrat', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Profil prospect (nom, poste, entreprise, contexte...)
+                    </label>
+                    <textarea
+                      value={prospectInfo}
+                      onChange={e => setProspectInfo(e.target.value)}
+                      placeholder="Ex: Antoine Dupont, Head of Engineering chez Lunii\nÉquipe Flutter, cherche des seniors..."
+                      style={{
+                        width: '100%', minHeight: 120, padding: '10px 12px',
+                        border: '1.5px solid #e0e0e0', borderRadius: 8, resize: 'vertical',
+                        fontFamily: 'Montserrat', fontSize: 12, lineHeight: 1.5,
+                        color: '#111', background: '#fff', outline: 'none', boxSizing: 'border-box'
+                      }}
+                      onFocus={e => e.target.style.borderColor = '#1400FF'}
+                      onBlur={e => e.target.style.borderColor = '#e0e0e0'}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#1400FF', marginBottom: 6, fontFamily: 'Montserrat', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      OU upload PDF LinkedIn du prospect
+                    </label>
+                    <div
+                      onClick={() => document.getElementById('prospectPdfInput').click()}
+                      style={{
+                        border: '2px dashed ' + (prospectPdf ? '#1400FF' : '#c8c8e8'),
+                        borderRadius: 10, padding: '1.5rem 1rem', textAlign: 'center',
+                        cursor: 'pointer', background: prospectPdf ? '#f0f0ff' : '#f8f8ff',
+                        minHeight: 120, display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center', gap: 8
+                      }}
+                    >
+                      <input id="prospectPdfInput" type="file" accept="application/pdf" style={{ display: 'none' }} onChange={e => setProspectPdf(e.target.files[0])} />
+                      {prospectPdf ? (
+                        <>
+                          <div style={{ fontSize: 24 }}>📄</div>
+                          <p style={{ fontFamily: 'Montserrat', fontWeight: 600, margin: 0, color: '#1400FF', fontSize: 12 }}>{prospectPdf.name}</p>
+                          <p style={{ fontSize: 11, color: '#888', margin: 0, fontFamily: 'Montserrat' }}>cliquez pour changer</p>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 24 }}>📎</div>
+                          <p style={{ fontFamily: 'Montserrat', fontWeight: 600, margin: 0, color: '#888', fontSize: 12 }}>PDF LinkedIn du prospect</p>
+                          <p style={{ fontSize: 11, color: '#aaa', margin: 0, fontFamily: 'Montserrat' }}>cliquez pour sélectionner</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={generatePush}
+                  disabled={generatingPush}
+                  style={{
+                    padding: '10px 20px', background: generatingPush ? '#c8c8e8' : '#1400FF',
+                    color: '#fff', border: 'none', borderRadius: 8,
+                    cursor: generatingPush ? 'not-allowed' : 'pointer',
+                    fontFamily: 'Montserrat', fontSize: 12, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  {generatingPush ? '⏳ Génération...' : '✨ Générer le mail'}
+                </button>
+
+                {pushResult && (
+                  <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ background: '#f8f8ff', borderRadius: 10, padding: '0.75rem 1rem', border: '1.5px solid #e0e0f0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1400FF', fontFamily: 'Montserrat', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Objet</span>
+                        <button onClick={() => copyToClipboard(pushResult.objet, 'objet')} style={{ padding: '4px 10px', borderRadius: 6, border: '1.5px solid #1400FF', background: copiedObjet ? '#1400FF' : 'transparent', color: copiedObjet ? '#fff' : '#1400FF', cursor: 'pointer', fontFamily: 'Montserrat', fontSize: 11, fontWeight: 600 }}>
+                          {copiedObjet ? '✓ Copié !' : 'Copier'}
+                        </button>
+                      </div>
+                      <p style={{ margin: 0, fontFamily: 'Montserrat', fontSize: 13, color: '#111', fontWeight: 500 }}>{pushResult.objet}</p>
+                    </div>
+
+                    <div style={{ background: '#f8f8ff', borderRadius: 10, padding: '0.75rem 1rem', border: '1.5px solid #e0e0f0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#1400FF', fontFamily: 'Montserrat', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Corps du mail</span>
+                        <button onClick={() => copyToClipboard(pushResult.corps, 'corps')} style={{ padding: '4px 10px', borderRadius: 6, border: '1.5px solid #1400FF', background: copiedCorps ? '#1400FF' : 'transparent', color: copiedCorps ? '#fff' : '#1400FF', cursor: 'pointer', fontFamily: 'Montserrat', fontSize: 11, fontWeight: 600 }}>
+                          {copiedCorps ? '✓ Copié !' : 'Copier'}
+                        </button>
+                      </div>
+                      <pre style={{ margin: 0, fontFamily: 'Montserrat', fontSize: 12, color: '#111', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {pushResult.corps}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <DossierPreview dossier={dossier} />
           </div>
