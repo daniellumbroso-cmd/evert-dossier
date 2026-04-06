@@ -39,7 +39,7 @@ function addCoverSlide(pres, d, coverPath) {
   slide.addText(d.nom, {
     x: 0.3, y: y_profil + line_h * 2.5,
     w: bar_x - 0.5, h: 0.45,
-    fontSize: 20, color: WHITE, fontFace: 'Calibri',
+    fontSize: 20, color: WHITE, fontFace: 'Montserrat',
     align: 'right', bold: false, margin: 0
   })
 
@@ -51,13 +51,13 @@ function addCoverSlide(pres, d, coverPath) {
   slide.addText('+ ' + exp1, {
     x: bar_x + 0.2, y: y_profil + 0.32 + line_h,
     w: W - bar_x - 0.3, h: 0.35,
-    fontSize: 14, color: WHITE, fontFace: 'Calibri', bold: true, margin: 0
+    fontSize: 14, color: WHITE, fontFace: 'Montserrat', bold: true, margin: 0
   })
   if (exp2) {
     slide.addText('+ ' + exp2, {
       x: bar_x + 0.2, y: y_profil + 0.32 + line_h * 3.2,
       w: W - bar_x - 0.3, h: 0.35,
-      fontSize: 14, color: WHITE, fontFace: 'Calibri', bold: true, margin: 0
+      fontSize: 14, color: WHITE, fontFace: 'Montserrat', bold: true, margin: 0
     })
   }
 }
@@ -68,33 +68,37 @@ function addResumeSlide(pres, d) {
 
   let y = 0.35
 
-  slide.addText('RÉSUMÉ', { x: 0.4, y, w: W - 0.8, h: 0.55, fontSize: 30, color: BLUE, fontFace: 'Georgia', align: 'center' })
+  slide.addText('RÉSUMÉ', { x: 0.4, y, w: W - 0.8, h: 0.55, fontSize: 30, color: BLUE, fontFace: 'Playfair Display', align: 'center' })
   y += 0.65
 
-  slide.addText('À propos', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 15, color: BLUE, fontFace: 'Georgia', bold: true, align: 'center' })
+  slide.addText('À propos', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 15, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
   y += 0.38
 
   const aproposText = d.a_propos.replace(/\n\n/g, ' ')
-  slide.addText(aproposText, { x: 0.4, y, w: W - 0.8, h: 1.9, fontSize: 9.5, color: BLACK, fontFace: 'Calibri', align: 'left', valign: 'top', wrap: true })
+  const aproposRich = parseRichText(aproposText, { fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' })
+  slide.addText(aproposRich, { x: 0.4, y, w: W - 0.8, h: 1.9, align: 'left', valign: 'top', wrap: true })
   y += 2.0
 
-  slide.addText('Principales Expériences', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Georgia', bold: true, align: 'center' })
+  slide.addText('Principales Expériences', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
   y += 0.38
 
-  const expItems = d.principales_experiences.map((e, i) => ({
-    text: `${e.entreprise} : ${e.role}${e.stack ? ' ' + e.stack : ''} (${e.dates})`,
-    options: { bullet: true, breakLine: i < d.principales_experiences.length - 1, fontSize: 9.5, color: BLACK, fontFace: 'Calibri' }
-  }))
+  const expItems = d.principales_experiences.map((e, i) => {
+    const yearsOnly = e.dates.replace(/[A-Za-zÀ-ÿ]+ (\d{4})/g, '$1')
+    return {
+      text: `${e.entreprise.toUpperCase()} : ${e.role}${e.stack ? ' ' + e.stack : ''} (${yearsOnly})`,
+      options: { bullet: true, breakLine: i < d.principales_experiences.length - 1, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' }
+    }
+  })
   slide.addText(expItems, { x: 0.5, y, w: W - 0.9, h: 1.0 })
   y += 1.1
 
-  slide.addText('Connaissances Techniques', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Georgia', bold: true, align: 'center' })
+  slide.addText('Connaissances Techniques', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
   y += 0.38
 
-  const techItems = d.competences_techniques.map((c, i) => ({
-    text: `${c.categorie} : ${c.items.join(', ')}`,
-    options: { bullet: true, breakLine: i < d.competences_techniques.length - 1, fontSize: 9.5, color: BLACK, fontFace: 'Calibri' }
-  }))
+  const techItems = d.competences_techniques.map((cat, i) => [
+    { text: cat.categorie + ' : ', options: { bullet: true, bold: true, fontSize: 9.5, color: BLUE, fontFace: 'Montserrat' } },
+    { text: cat.items.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: i < d.competences_techniques.length - 1 } }
+  ]).flat()
   slide.addText(techItems, { x: 0.5, y, w: W - 0.9, h: 1.5 })
 }
 
@@ -108,26 +112,26 @@ function addExperienceSlide(pres, exp) {
   // ── Titre + dates : zone séparée car style très différent ──
   slide.addText('↗  ' + exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
     x: 0.3, y: 0.12, w: W - 0.5, h: 0.5,
-    fontSize: 13, color: BLUE, fontFace: 'Georgia', bold: true, wrap: true
+    fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, wrap: true
   })
   slide.addText(exp.dates, {
     x: 0.3, y: 0.65, w: W - 0.5, h: 0.25,
-    fontSize: 10, color: BLUE, fontFace: 'Calibri', italic: true
+    fontSize: 10, color: BLUE, fontFace: 'Montserrat', italic: true
   })
 
   // ── Tout le contenu en UNE SEULE zone de texte fluide ──
   // Comme ça l'utilisateur peut tout modifier/déplacer d'un bloc
   const runs = []
 
-  const br = () => runs.push({ text: '', options: { breakLine: true, fontSize: 9.5, fontFace: 'Calibri', color: BLACK } })
+  const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 4, fontFace: 'Montserrat', color: BLACK, paraSpaceAfter: 6 } })
   const line = (text, opts = {}) => {
-    runs.push({ text, options: { fontSize: 9.5, fontFace: 'Calibri', color: BLACK, breakLine: true, ...opts } })
+    runs.push({ text, options: { fontSize: 9.5, fontFace: 'Montserrat', color: BLACK, breakLine: true, ...opts } })
   }
   const sectionTitle = (text) => {
-    runs.push({ text, options: { fontSize: 10.5, fontFace: 'Calibri', color: BLACK, bold: true, breakLine: true, paraSpaceAfter: 2 } })
+    runs.push({ text, options: { fontSize: 10.5, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: 8, paraSpaceAfter: 4 } })
   }
   const bulletRich = (text, isLast) => {
-    const parts = parseRichText(text, { fontSize: 9.5, color: BLACK, fontFace: 'Calibri' })
+    const parts = parseRichText(text, { fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' })
     parts.forEach((p, i) => {
       const isFirstOfPart = i === 0
       const isLastOfPart = i === parts.length - 1
@@ -137,6 +141,7 @@ function addExperienceSlide(pres, exp) {
           ...p.options,
           bullet: isFirstOfPart ? true : false,
           breakLine: isLastOfPart ? true : false,
+          paraSpaceAfter: isLastOfPart ? 4 : 0,
         }
       })
     })
@@ -171,8 +176,8 @@ function addExperienceSlide(pres, exp) {
 
   // Env technique
   if (exp.env_technique?.length) {
-    runs.push({ text: 'Environnement technique : ', options: { bold: true, fontSize: 9.5, color: BLACK, fontFace: 'Calibri' } })
-    runs.push({ text: exp.env_technique.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Calibri', breakLine: true } })
+    runs.push({ text: 'Environnement technique : ', options: { bold: true, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' } })
+    runs.push({ text: exp.env_technique.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: true } })
   }
 
   // Une seule addText pour tout le contenu
@@ -188,22 +193,22 @@ function addFormationSlide(pres, d) {
   slide.background = { color: LIGHT }
 
   let y = 1.5
-  slide.addText('Formation & Certifications', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Georgia', align: 'center' })
+  slide.addText('Formation & Certifications', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center' })
   y += 0.7
 
   d.formations?.forEach(f => {
     slide.addText(`${f.diplome}${f.ecole ? ' – ' + f.ecole : ''}${f.annee ? ' (' + f.annee + ')' : ''}`, {
-      x: 0.4, y, w: W - 0.8, h: 0.38, fontSize: 13, color: BLUE, fontFace: 'Georgia', align: 'center'
+      x: 0.4, y, w: W - 0.8, h: 0.38, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', align: 'center'
     })
     y += 0.45
   })
 
   y += 0.5
-  slide.addText('Langues', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Georgia', align: 'center' })
+  slide.addText('Langues', { x: 0.4, y, w: W - 0.8, h: 0.5, fontSize: 22, color: BLUE, fontFace: 'Playfair Display', align: 'center' })
   y += 0.65
 
   d.langues?.forEach(l => {
-    slide.addText(`${l.langue} – ${l.niveau}`, { x: 0.4, y, w: W - 0.8, h: 0.35, fontSize: 13, color: BLUE, fontFace: 'Georgia', align: 'center' })
+    slide.addText(`${l.langue} – ${l.niveau}`, { x: 0.4, y, w: W - 0.8, h: 0.35, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', align: 'center' })
     y += 0.42
   })
 }
