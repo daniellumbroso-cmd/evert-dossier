@@ -201,7 +201,7 @@ export default function AppPage() {
           height: 64
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 32, width: 'auto' }} />
+            <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 42, width: 'auto' }} />
             <div style={{ width: 1, height: 24, background: '#e0e0f0' }} />
             <span style={{
               fontFamily: 'Montserrat, sans-serif', fontWeight: 600, fontSize: 14,

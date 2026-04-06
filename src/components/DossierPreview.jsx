@@ -1,33 +1,30 @@
 export default function DossierPreview({ dossier: d }) {
   const s = {
     page: {
-      background: '#fff', border: '1px solid #ebebе6', borderRadius: 16,
-      padding: '2.5rem', fontFamily: 'DM Sans, sans-serif', fontSize: 14,
-      lineHeight: 1.7, color: '#0a0a0a', maxWidth: '100%'
+      background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 16,
+      padding: '2.5rem', fontFamily: 'Montserrat, sans-serif', fontSize: 14,
+      lineHeight: 1.7, color: '#111', maxWidth: '100%'
     },
     headerBlock: {
-      display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-      background: '#0a0a0a', color: '#fafaf8', borderRadius: 10,
-      padding: '1.25rem 1.5rem', marginBottom: '2rem'
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      background: '#fff', borderBottom: '2px solid #1400FF',
+      padding: '1.25rem 1.5rem', marginBottom: '2rem', borderRadius: '10px 10px 0 0'
     },
-    name: { fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, margin: 0, letterSpacing: '-0.02em' },
-    role: { fontSize: 13, color: '#9a9a90', marginTop: 4 },
+    name: { fontFamily: 'Montserrat, sans-serif', fontWeight: 800, fontSize: 22, margin: 0, color: '#1400FF' },
+    role: { fontSize: 13, color: '#666', marginTop: 4, fontFamily: 'Montserrat, sans-serif' },
     badge: {
-      fontSize: 11, padding: '4px 10px',
-      background: '#e8ff47', color: '#0a0a0a',
-      borderRadius: 20, fontWeight: 700, fontFamily: 'Syne, sans-serif',
-      flexShrink: 0, marginTop: 2
+      flexShrink: 0
     },
     sectionTitle: {
-      fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 10,
-      textTransform: 'uppercase', letterSpacing: '0.1em', color: '#9a9a90',
-      borderBottom: '1px solid #ebebе6', paddingBottom: 6,
+      fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 10,
+      textTransform: 'uppercase', letterSpacing: '0.1em', color: '#1400FF',
+      borderBottom: '1px solid #e8e8f0', paddingBottom: 6,
       margin: '2rem 0 1rem'
     },
     subTitle: { fontWeight: 500, fontSize: 13, margin: '0 0 4px', color: '#0a0a0a' },
     muted: { color: '#9a9a90' },
     expBlock: {
-      borderLeft: '2px solid #e8ff47', paddingLeft: '1rem',
+      borderLeft: '3px solid #1400FF', paddingLeft: '1rem',
       marginBottom: '1.5rem', paddingBottom: '0.5rem'
     },
     expTitle: { fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 15, margin: '0 0 2px' },
@@ -41,8 +38,8 @@ export default function DossierPreview({ dossier: d }) {
     tagRow: { display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 },
     tag: {
       fontSize: 11, padding: '3px 8px',
-      background: '#f5f5f2', borderRadius: 20,
-      color: '#5c5c55', border: '1px solid #ebebе6'
+      background: '#f0f0ff', borderRadius: 20,
+      color: '#1400FF', border: '1px solid #d0d0f0'
     }
   }
 
@@ -54,7 +51,7 @@ export default function DossierPreview({ dossier: d }) {
           <p style={s.name}>{d.nom}</p>
           <p style={s.role}>{d.titre}</p>
         </div>
-        <span style={s.badge}>ever"T</span>
+        <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 28, width: 'auto', opacity: 0.9 }} />
       </div>
 
       {/* RÉSUMÉ */}

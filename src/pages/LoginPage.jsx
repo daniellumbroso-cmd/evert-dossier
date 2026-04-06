@@ -38,7 +38,7 @@ export default function LoginPage() {
           marginBottom: '3rem',
           animation: 'fadeUp 0.5s ease forwards'
         }}>
-          <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 44, width: 'auto' }} />
+          <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 80, width: 'auto' }} />
         </div>
 
         {/* Card */}
@@ -116,7 +116,7 @@ export default function LoginPage() {
             fontFamily: 'Montserrat, sans-serif', fontWeight: 400,
             animation: 'fadeUp 0.5s ease 0.4s forwards', opacity: 0
           }}>
-            Réservé aux comptes @ever-t.com
+            Réservé aux comptes @ever-t.fr
           </p>
         </div>
       </div>
