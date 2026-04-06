@@ -74,9 +74,20 @@ function addResumeSlide(pres, d) {
   slide.addText('À propos', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 15, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
   y += 0.38
 
-  const aproposText = d.a_propos.replace(/\n\n/g, ' ')
-  const aproposRich = parseRichText(aproposText, { fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' })
-  slide.addText(aproposRich, { x: 0.4, y, w: W - 0.8, h: 1.9, align: 'left', valign: 'top', wrap: true })
+  // À propos : chaque paragraphe séparé par une ligne vide
+  const aproposParas = d.a_propos.split('\n\n').filter(p => p.trim())
+  const aproposRuns = []
+  aproposParas.forEach((para, i) => {
+    const rich = parseRichText(para.trim(), { fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' })
+    rich.forEach((r, j) => {
+      const isLast = j === rich.length - 1
+      aproposRuns.push({
+        text: r.text,
+        options: { ...r.options, breakLine: isLast, paraSpaceAfter: isLast && i < aproposParas.length - 1 ? 10 : 2 }
+      })
+    })
+  })
+  slide.addText(aproposRuns, { x: 0.4, y, w: W - 0.8, h: 1.9, align: 'left', valign: 'top', wrap: true })
   y += 2.0
 
   slide.addText('Principales Expériences', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
@@ -85,11 +96,21 @@ function addResumeSlide(pres, d) {
   const expItems = d.principales_experiences.map((e, i) => {
     const yearsOnly = e.dates.replace(/[A-Za-zÀ-ÿ]+ (\d{4})/g, '$1')
     return {
-      text: `${e.entreprise.toUpperCase()} : ${e.role}${e.stack ? ' ' + e.stack : ''} (${yearsOnly})`,
-      options: { bullet: true, breakLine: i < d.principales_experiences.length - 1, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' }
+      // Rich text: société en bleu, reste en noir
+      text: null, // unused
+      richText: [
+        { text: e.entreprise.toUpperCase(), options: { bold: true, color: BLUE, fontSize: 9.5, fontFace: 'Montserrat' } },
+        { text: ` : ${e.role}${e.stack ? ' ' + e.stack : ''} (${yearsOnly})`, options: { color: BLACK, fontSize: 9.5, fontFace: 'Montserrat', breakLine: i < d.principales_experiences.length - 1, paraSpaceAfter: 8 } }
+      ]
     }
   })
-  slide.addText(expItems, { x: 0.5, y, w: W - 0.9, h: 1.0 })
+  const expRuns = expItems.flatMap((item, i) => {
+    const runs = item.richText
+    // Ajouter bullet sur premier run
+    runs[0].options.bullet = true
+    return runs
+  })
+  slide.addText(expRuns, { x: 0.5, y, w: W - 0.9, h: 1.1 })
   y += 1.1
 
   slide.addText('Connaissances Techniques', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
@@ -182,8 +203,8 @@ function addExperienceSlide(pres, exp) {
 
   // Une seule addText pour tout le contenu
   slide.addText(runs, {
-    x: 0.3, y: 0.95,
-    w: W - 0.5, h: H - 1.1,
+    x: 0.3, y: 1.3,
+    w: W - 0.5, h: H - 1.45,
     valign: 'top', wrap: true
   })
 }
