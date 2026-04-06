@@ -135,11 +135,11 @@ function addExperienceSlide(pres, exp) {
   // Icône favicon à gauche du titre
   const iconPath = path.join(process.cwd(), 'template_assets', 'favicon_icon.png')
   if (fs.existsSync(iconPath)) {
-    slide.addImage({ path: iconPath, x: 0.32, y: 0.57, w: 0.28, h: 0.28 })
+    slide.addImage({ path: iconPath, x: 0.5, y: 0.6, w: 0.25, h: 0.25 })
   }
 
   slide.addText(exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
-    x: 0.72, y: 0.52, w: W - 0.9, h: 0.5,
+    x: 0.85, y: 0.52, w: W - 1.0, h: 0.5,
     fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
   })
   slide.addText(exp.dates, {
