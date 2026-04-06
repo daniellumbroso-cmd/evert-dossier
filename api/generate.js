@@ -219,15 +219,11 @@ export default async function handler(req, res) {
         const pushResponse = await anthropic.messages.create({ model: 'claude-opus-4-5', max_tokens: 1500, system: PUSH_PROMPT, messages: pushMessages })
         const rawPush = pushResponse.content.map(b => b.text || '').join('')
         console.log('RAW PUSH RESPONSE:', JSON.stringify(rawPush.substring(0, 500)))
-        // Nettoyage robuste : extraire le JSON même si Claude ajoute du texte autour
-        let cleanedPush = rawPush
-          .replace(/```json\n?/g, '').replace(/```\n?/g, '')  // backticks
-          .replace(/^[^{]*/s, '')   // tout ce qui précède le premier {
-          .replace(/}[^}]*$/s, '}') // tout ce qui suit le dernier }
-          .trim()
-        // Fallback : extraire via regex si le JSON est imbriqué dans du texte
-        const jsonMatch = rawPush.match(/\{[\s\S]*"objet"[\s\S]*"corps"[\s\S]*\}/)
-        if (jsonMatch) cleanedPush = jsonMatch[0]
+        // Extraire le JSON : chercher le premier { et le dernier }
+        const firstBrace = rawPush.indexOf('{')
+        const lastBrace = rawPush.lastIndexOf('}')
+        if (firstBrace === -1 || lastBrace === -1) throw new Error('Pas de JSON trouvé dans la réponse')
+        const cleanedPush = rawPush.substring(firstBrace, lastBrace + 1)
         const result = JSON.parse(cleanedPush)
         return res.json({ success: true, objet: result.objet, corps: result.corps })
       } catch (e) {
