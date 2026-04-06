@@ -51,7 +51,7 @@ export default function DossierPreview({ dossier: d }) {
           <p style={s.name}>{d.nom}</p>
           <p style={s.role}>{d.titre}</p>
         </div>
-        <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 28, width: 'auto', opacity: 0.9 }} />
+        <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 112, width: 'auto', opacity: 0.9 }} />
       </div>
 
       {/* RÉSUMÉ */}

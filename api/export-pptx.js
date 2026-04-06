@@ -115,7 +115,7 @@ function addResumeSlide(pres, d) {
   y += 1.1
 
   slide.addText('Connaissances Techniques', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
-  y += 0.38
+  y += 0.55
 
   const techItems = d.competences_techniques.map((cat, i) => [
     { text: cat.categorie + ' : ', options: { bullet: true, bold: true, fontSize: 9.5, color: BLUE, fontFace: 'Montserrat' } },

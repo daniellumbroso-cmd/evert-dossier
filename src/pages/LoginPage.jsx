@@ -38,7 +38,7 @@ export default function LoginPage() {
           marginBottom: '3rem',
           animation: 'fadeUp 0.5s ease forwards'
         }}>
-          <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 80, width: 'auto' }} />
+          <img src="/evert-logo.png" alt="ever&quot;T" style={{ height: 160, width: 'auto' }} />
         </div>
 
         {/* Card */}
