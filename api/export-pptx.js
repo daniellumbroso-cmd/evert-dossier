@@ -90,6 +90,7 @@ function addResumeSlide(pres, d) {
   slide.addText(aproposRuns, { x: 0.4, y, w: W - 0.8, h: 1.9, align: 'left', valign: 'top', wrap: true })
   y += 2.0
 
+  y += 0.4 // espace supplémentaire avant Principales Expériences
   slide.addText('Principales Expériences', { x: 0.4, y, w: W - 0.8, h: 0.32, fontSize: 13, color: BLUE, fontFace: 'Playfair Display', bold: true, align: 'center' })
   y += 0.38
 
@@ -118,7 +119,7 @@ function addResumeSlide(pres, d) {
 
   const techItems = d.competences_techniques.map((cat, i) => [
     { text: cat.categorie + ' : ', options: { bullet: true, bold: true, fontSize: 9.5, color: BLUE, fontFace: 'Montserrat' } },
-    { text: cat.items.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: i < d.competences_techniques.length - 1 } }
+    { text: cat.items.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: i < d.competences_techniques.length - 1, paraSpaceAfter: 10 } }
   ]).flat()
   slide.addText(techItems, { x: 0.5, y, w: W - 0.9, h: 1.5 })
 }
