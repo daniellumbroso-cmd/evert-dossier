@@ -222,8 +222,37 @@ export default async function handler(req, res) {
         const firstBrace = rawPush.indexOf('{')
         const lastBrace = rawPush.lastIndexOf('}')
         if (firstBrace === -1 || lastBrace === -1) throw new Error('Pas de JSON trouvé dans la réponse')
-        const cleanedPush = rawPush.substring(firstBrace, lastBrace + 1)
-        const result = JSON.parse(cleanedPush)
+        let cleanedPush = rawPush.substring(firstBrace, lastBrace + 1)
+        // Sanitize : remplacer ever"T par ever\"T pour éviter les guillemets non échappés
+        // puis tenter le parse ; si échec, tenter avec relaxed parsing
+        let result
+        try {
+          result = JSON.parse(cleanedPush)
+        } catch (parseErr) {
+          // Fallback : extraire objet et corps ligne par ligne
+          const lines = cleanedPush.split('\n')
+          let objet = '', corps = ''
+          for (const line of lines) {
+            const om = line.match(/^\s*"objet"\s*:\s*"(.+?)"\s*,?\s*$/)
+            if (om) objet = om[1]
+          }
+          // Pour corps, prendre tout entre 'corps': ' et la derniere '
+          const corpsStart = cleanedPush.indexOf('"corps"')
+          if (corpsStart > -1) {
+            const afterCorps = cleanedPush.substring(corpsStart + 8)
+            const firstQuote = afterCorps.indexOf('"')
+            const lastQuote = afterCorps.lastIndexOf('"')
+            if (firstQuote > -1 && lastQuote > firstQuote) {
+              corps = afterCorps.substring(firstQuote + 1, lastQuote)
+                .replace(/\\n/g, '\n')
+            }
+          }
+          if (objet && corps) {
+            result = { objet, corps }
+          } else {
+            throw parseErr
+          }
+        }
         return res.json({ success: true, objet: result.objet, corps: result.corps })
       } catch (e) {
         console.log('PUSH ERROR:', e.message, '| RAW:', JSON.stringify(rawPush.substring(0, 300)))
