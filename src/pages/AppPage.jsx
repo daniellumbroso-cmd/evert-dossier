@@ -22,6 +22,7 @@ export default function AppPage() {
   const [cvText, setCvText] = useState('')
   const [community, setCommunity] = useState('DATA')
   const [instructions, setInstructions] = useState('')
+  const [besoinClient, setBesoinClient] = useState('')
   const [loading, setLoading] = useState(false)
   const [currentStep, setCurrentStep] = useState(-1)
   const [dossier, setDossier] = useState(null)
@@ -62,6 +63,7 @@ export default function AppPage() {
       const formData = new FormData()
       formData.append('community', community)
       if (instructions) formData.append('instructions', instructions)
+      if (besoinClient) formData.append('besoinClient', besoinClient)
       if (tab === 'pdf' && pdfFile) formData.append('pdf', pdfFile)
       if (tab === 'text') formData.append('cvText', cvText)
 
@@ -138,6 +140,7 @@ export default function AppPage() {
   const reset = () => {
     setPdfFile(null)
     setCvText('')
+    setBesoinClient('')
     setDossier(null)
     setSavedUrl(null)
     setCurrentStep(-1)
@@ -325,6 +328,25 @@ export default function AppPage() {
                     </select>
                     <ChevronDown size={14} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#9a9a90', pointerEvents: 'none' }} />
                   </div>
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: '#5c5c55', marginBottom: 6, fontFamily: 'DM Sans', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Besoin client (optionnel)
+                  </label>
+                  <textarea
+                    value={besoinClient}
+                    onChange={e => setBesoinClient(e.target.value)}
+                    placeholder="Ex: Mission React Senior sur un projet e-commerce, besoin d'expertise CI/CD et AWS..."
+                    style={{
+                      width: '100%', minHeight: 80, padding: '10px 12px',
+                      border: '1px solid #d4d4cc', borderRadius: 8, resize: 'vertical',
+                      fontFamily: 'DM Sans, sans-serif', fontSize: 13, lineHeight: 1.5,
+                      color: '#0a0a0a', background: '#fafaf8', outline: 'none'
+                    }}
+                    onFocus={e => e.target.style.borderColor = '#0a0a0a'}
+                    onBlur={e => e.target.style.borderColor = '#d4d4cc'}
+                  />
                 </div>
 
                 <div>
