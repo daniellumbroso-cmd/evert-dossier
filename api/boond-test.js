@@ -25,51 +25,42 @@ export default async function handler(req, res) {
   const headers = { 'X-Jwt-Client-BoondManager': jwt, 'Content-Type': 'application/json', 'Accept': 'application/json' }
 
   try {
-    // 1. Récupérer la fiche complète de Rudy
+    // 1. Fiche complète de Rudy — inspecter la structure brute
     const candidateRes = await fetch(`${apiUrl}candidates/23358`, { headers })
-    const candidateData = await candidateRes.json()
-    const attrs = candidateData?.data?.attributes || {}
+    const candidateRaw = await candidateRes.json()
 
-    // 2. Récupérer les actions de Rudy
-    const actionsRes = await fetch(`${apiUrl}candidates/23358/actions?page[limit]=5`, { headers })
-    const actionsData = await actionsRes.json()
-    const actions = actionsData?.data || []
+    // 2. Actions de Rudy — inspecter la structure brute
+    const actionsRes = await fetch(`${apiUrl}candidates/23358/actions?page[limit]=3`, { headers })
+    const actionsRaw = await actionsRes.json()
 
-    // 3. Récupérer le besoin ALEXI (opportunity 1269)
+    // 3. Opportunity ALEXI
     const oppRes = await fetch(`${apiUrl}opportunities/1269`, { headers })
-    const oppData = await oppRes.json()
-    const opp = oppData?.data?.attributes || {}
+    const oppRaw = await oppRes.json()
 
+    // Retourner les structures brutes pour diagnostic
     res.json({
-      success: true,
-      candidate: {
-        id: '23358',
-        nom: `${attrs.firstName} ${attrs.lastName}`,
-        titre: attrs.title,
-        skills: attrs.skills?.substring(0, 500),
-        experiences: attrs.references?.map(r => ({
-          titre: r.title,
-          entreprise: r.company,
-          description: r.description?.substring(0, 300),
-          periode: `${r.startMonth}/${r.startYear} - ${r.endMonth}/${r.endYear}`
-        }))
-      },
-      actions: actions.map(a => ({
-        titre: a.attributes?.title,
-        description: a.attributes?.description?.substring(0, 400),
-        date: a.attributes?.date
-      })),
-      opportunity_ALEXI: {
-        id: '1269',
-        titre: opp.title,
-        description: opp.description?.substring(0, 800),
-        skills: opp.skills,
-        state: opp.state,
-        startDate: opp.startDate
-      }
+      candidate_keys: Object.keys(candidateRaw),
+      candidate_data_keys: candidateRaw.data ? Object.keys(candidateRaw.data) : 'no data key',
+      candidate_attributes_sample: candidateRaw.data?.attributes
+        ? Object.keys(candidateRaw.data.attributes).slice(0, 15)
+        : candidateRaw.data ? JSON.stringify(candidateRaw.data).substring(0, 300) : 'no data',
+      candidate_firstName: candidateRaw.data?.attributes?.firstName
+        || candidateRaw.attributes?.firstName
+        || candidateRaw.data?.firstName
+        || '?',
+
+      actions_keys: Object.keys(actionsRaw),
+      actions_data_sample: actionsRaw.data?.[0]
+        ? JSON.stringify(actionsRaw.data[0]).substring(0, 400)
+        : 'no actions data',
+
+      opp_keys: Object.keys(oppRaw),
+      opp_title: oppRaw.data?.attributes?.title || oppRaw.attributes?.title || '?',
+      opp_description_preview: (oppRaw.data?.attributes?.description || oppRaw.attributes?.description || 'vide')?.substring(0, 300),
+      opp_sample: JSON.stringify(oppRaw.data?.attributes || {}).substring(0, 500)
     })
 
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: err.message, stack: err.stack?.substring(0, 300) })
   }
 }
