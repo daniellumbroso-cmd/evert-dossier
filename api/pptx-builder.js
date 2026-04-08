@@ -209,18 +209,16 @@ function _renderExpSlide(pres, exp, isContinued) {
   const subRoleDates = (text) => {
     runs.push({ text, options: { fontSize: 9, fontFace: 'Montserrat', color: BLACK, italic: true, breakLine: true, paraSpaceAfter: 4 } })
   }
-  const bulletRich = (text, isLast) => {
+  const bulletRich = (text) => {
     const parts = parseRichText(text, { fontSize: fSize, color: BLACK, fontFace: 'Montserrat' })
     parts.forEach((p, i) => {
-      const isFirstOfPart = i === 0
-      const isLastOfPart = i === parts.length - 1
       runs.push({
         text: p.text,
         options: {
           ...p.options,
-          bullet: isFirstOfPart ? true : false,
-          breakLine: isLastOfPart ? true : false,
-          paraSpaceAfter: isLastOfPart ? spaceAfter : 0,
+          bullet: i === 0,
+          breakLine: i === parts.length - 1,
+          paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0,
         }
       })
     })
@@ -238,7 +236,7 @@ function _renderExpSlide(pres, exp, isContinued) {
       sub.activites?.forEach(act => {
         sectionTitle(act.theme)
         if (act.points && act.points.length > 0) {
-          act.points.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+          act.points.forEach((pt, i) => bulletRich(pt))
         } else if (act.texte) {
           bulletLine(act.texte)
         }
@@ -250,7 +248,7 @@ function _renderExpSlide(pres, exp, isContinued) {
     exp.activites?.forEach(act => {
       sectionTitle(act.theme)
       if (act.points && act.points.length > 0) {
-        act.points.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+        act.points.forEach((pt, i) => bulletRich(pt))
       } else if (act.texte) {
         bulletLine(act.texte)
       }
@@ -260,13 +258,13 @@ function _renderExpSlide(pres, exp, isContinued) {
 
   if (exp.enjeux?.length) {
     sectionTitle('Enjeux :')
-    exp.enjeux.forEach((e, i) => bulletRich(e, i === exp.enjeux.length - 1))
+    exp.enjeux.forEach((e, i) => bulletRich(e))
     br()
   }
 
   if (exp.resultats?.length) {
     sectionTitle('Résultats :')
-    exp.resultats.forEach((r, i) => bulletRich(r, i === exp.resultats.length - 1))
+    exp.resultats.forEach((r, i) => bulletRich(r))
     br()
   }
 
