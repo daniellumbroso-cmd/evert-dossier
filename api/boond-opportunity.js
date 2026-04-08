@@ -20,21 +20,33 @@ export default async function handler(req, res) {
   const clientKey = process.env.BOOND_CLIENT_KEY
   const userToken = process.env.BOOND_USER_TOKEN
   const baseUrl = process.env.BOOND_BASE_URL
-  const apiUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'
+  const apiUrl = baseUrl.replace(/\/+$/, '') // supprimer le slash final
   const opportunityId = req.query.id || '1269'
 
   const jwt = buildBoondJWT(userToken, clientToken, clientKey)
   const headers = { 'X-Jwt-Client-BoondManager': jwt, 'Content-Type': 'application/json', 'Accept': 'application/json' }
 
-  const results = {}
-
   try {
-    const r = await fetch(`${apiUrl}opportunities/${opportunityId}/information`, { headers })
+    const r = await fetch(`${apiUrl}/opportunities/${opportunityId}/information`, { headers })
     const json = await r.json()
-    results[`opportunities/${opportunityId}/information`] = { status: r.status, data: json }
-  } catch (e) {
-    results[`opportunities/${opportunityId}/information`] = { error: e.message }
-  }
+    const attrs = json?.data?.attributes
+    const included = json?.included || []
+    const company = included.find(i => i.type === 'company')
+    const contact = included.find(i => i.type === 'contact')
 
-  res.status(200).json({ opportunityId, results })
+    if (r.status !== 200 || !attrs) {
+      return res.status(404).json({ error: 'Besoin introuvable', status: r.status })
+    }
+
+    res.status(200).json({
+      opportunityId,
+      title: attrs.title || '',
+      company: company?.attributes?.name || '',
+      contact: contact ? `${contact.attributes.firstName} ${contact.attributes.lastName}`.trim() : '',
+      tjm: attrs.estimatesExcludingTax ? `${attrs.estimatesExcludingTax}€` : '',
+      description: attrs.description || ''
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
 }
