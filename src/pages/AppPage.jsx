@@ -38,10 +38,10 @@ export default function AppPage() {
   const [prospectInfoUpload, setProspectInfoUpload] = useState('')
   const [prospectPdfUpload, setProspectPdfUpload] = useState(null)
   const [pushReady, setPushReady] = useState(false)
-  const [showBoondPanel, setShowBoondPanel] = useState(false)
-  const [boondCandidateId, setBoondCandidateId] = useState('')
+  const [besoinMode, setBesoinMode] = useState('text')
   const [boondOpportunityId, setBoondOpportunityId] = useState('')
   const [loadingBoond, setLoadingBoond] = useState(false)
+  const [boondBesoinPreview, setBoondBesoinPreview] = useState(null)
 
   const onDrop = useCallback(acceptedFiles => {
     const file = acceptedFiles[0]
@@ -236,29 +236,34 @@ export default function AppPage() {
     if (type === 'corps') { setCopiedCorps(true); setTimeout(() => setCopiedCorps(false), 2000) }
   }
 
-  const generateFromBoond = async () => {
-    if (!boondCandidateId.trim()) return toast.error('Renseignez l\'ID candidat Boond')
+  const loadBoondBesoin = async () => {
+    if (!boondOpportunityId.trim()) return toast.error('Renseignez l'ID besoin Boond')
     setLoadingBoond(true)
-    setDossier(null)
-    setPushResult(null)
-    setPushReady(false)
+    setBoondBesoinPreview(null)
     try {
-      const response = await fetch('/api/boond-generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          candidateId: boondCandidateId.trim(),
-          opportunityId: boondOpportunityId.trim() || undefined,
-          community
-        })
-      })
-      const text = await response.text()
-      let data
-      try { data = JSON.parse(text) } catch { throw new Error('Réponse invalide') }
-      if (!response.ok) throw new Error(data.error || 'Erreur serveur')
-      setDossier(data.dossier)
-      toast.success('Dossier généré depuis Boond !')
-      setShowBoondPanel(false)
+      const r = await fetch('/api/boond-opportunity?id=' + boondOpportunityId.trim())
+      const data = await r.json()
+      if (!r.ok || !data.results) throw new Error('Besoin introuvable')
+      const info = data.results['opportunities/' + boondOpportunityId.trim() + '/information']
+      if (!info || info.status !== 200) throw new Error('Besoin introuvable')
+      const attrs = info.data?.data?.attributes
+      const included = info.data?.included || []
+      const company = included.find(i => i.type === 'company')
+      const contact = included.find(i => i.type === 'contact')
+      const preview = {
+        title: attrs?.title || '',
+        company: company?.attributes?.name || '',
+        contact: contact ? (contact.attributes.firstName + ' ' + contact.attributes.lastName).trim() : '',
+        description: attrs?.description || '',
+        tjm: attrs?.estimatesExcludingTax ? attrs.estimatesExcludingTax + '€' : ''
+      }
+      setBoondBesoinPreview(preview)
+      setBesoinClient(preview.title + '
+
+Client : ' + preview.company + '
+
+' + preview.description)
+      toast.success('Besoin chargé depuis Boond !')
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -280,6 +285,9 @@ export default function AppPage() {
     setPushReady(false)
     setProspectInfoUpload('')
     setProspectPdfUpload(null)
+    setBoondBesoinPreview(null)
+    setBoondOpportunityId('')
+    setBesoinMode('text')
   }
 
   const BLUE = '#1400FF'
@@ -474,22 +482,66 @@ export default function AppPage() {
                 </div>
 
                 <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#1400FF', marginBottom: 6, fontFamily: 'Montserrat, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Besoin client (optionnel)
-                  </label>
-                  <textarea
-                    value={besoinClient}
-                    onChange={e => setBesoinClient(e.target.value)}
-                    placeholder="Ex: Mission React Senior sur un projet e-commerce, besoin d'expertise CI/CD et AWS..."
-                    style={{
-                      width: '100%', minHeight: 80, padding: '10px 12px',
-                      border: '1.5px solid #e0e0e0', borderRadius: 8, resize: 'vertical',
-                    fontFamily: 'Montserrat, sans-serif', fontSize: 13, lineHeight: 1.5,
-                    color: '#111', background: '#fff', outline: 'none'
-                    }}
-                    onFocus={e => e.target.style.borderColor = '#1400FF'}
-                    onBlur={e => e.target.style.borderColor = '#e0e0e0'}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: '#1400FF', fontFamily: 'Montserrat, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Besoin client (optionnel)
+                    </label>
+                    <div style={{ display: 'flex', background: '#f0f0ff', borderRadius: 6, padding: 2, gap: 2 }}>
+                      {['text', 'boond'].map(m => (
+                        <button
+                          key={m}
+                          onClick={() => { setBesoinMode(m); if (m === 'text') { setBoondBesoinPreview(null); setBoondOpportunityId('') } }}
+                          style={{
+                            padding: '3px 10px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                            fontFamily: 'Montserrat', fontSize: 10, fontWeight: 600,
+                            background: besoinMode === m ? '#1400FF' : 'transparent',
+                            color: besoinMode === m ? '#fff' : '#888'
+                          }}
+                        >
+                          {m === 'text' ? 'Texte libre' : '🔗 ID Boond'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {besoinMode === 'text' ? (
+                    <textarea
+                      value={besoinClient}
+                      onChange={e => setBesoinClient(e.target.value)}
+                      placeholder="Ex: Mission React Senior sur un projet e-commerce..."
+                      style={{ width: '100%', minHeight: 80, padding: '10px 12px', border: '1.5px solid #e0e0e0', borderRadius: 8, resize: 'vertical', fontFamily: 'Montserrat, sans-serif', fontSize: 13, lineHeight: 1.5, color: '#111', background: '#fff', outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={e => e.target.style.borderColor = '#1400FF'}
+                      onBlur={e => e.target.style.borderColor = '#e0e0e0'}
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          value={boondOpportunityId}
+                          onChange={e => setBoondOpportunityId(e.target.value)}
+                          placeholder="ID besoin Boond (ex: 1269)"
+                          onKeyDown={e => e.key === 'Enter' && loadBoondBesoin()}
+                          style={{ flex: 1, padding: '8px 12px', border: '1.5px solid #e0e0e0', borderRadius: 8, fontFamily: 'Montserrat', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                          onFocus={e => e.target.style.borderColor = '#1400FF'}
+                          onBlur={e => e.target.style.borderColor = '#e0e0e0'}
+                        />
+                        <button
+                          onClick={loadBoondBesoin}
+                          disabled={loadingBoond}
+                          style={{ padding: '8px 14px', background: loadingBoond ? '#c8c8e8' : '#1400FF', color: '#fff', border: 'none', borderRadius: 8, cursor: loadingBoond ? 'not-allowed' : 'pointer', fontFamily: 'Montserrat', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}
+                        >
+                          {loadingBoond ? '...' : 'Charger'}
+                        </button>
+                      </div>
+                      {boondBesoinPreview && (
+                        <div style={{ background: '#f0f0ff', border: '1.5px solid #1400FF', borderRadius: 8, padding: '10px 12px' }}>
+                          <p style={{ margin: '0 0 4px', fontFamily: 'Montserrat', fontSize: 13, fontWeight: 700, color: '#1400FF' }}>{boondBesoinPreview.title}</p>
+                          <p style={{ margin: '0 0 2px', fontFamily: 'Montserrat', fontSize: 11, color: '#555' }}>{boondBesoinPreview.company}{boondBesoinPreview.contact ? ' · ' + boondBesoinPreview.contact : ''}{boondBesoinPreview.tjm ? ' · TJM ' + boondBesoinPreview.tjm : ''}</p>
+                          <p style={{ margin: '4px 0 0', fontFamily: 'Montserrat', fontSize: 10, color: '#1400FF', fontWeight: 600 }}>✓ Description complète transmise à Claude</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -543,49 +595,7 @@ export default function AppPage() {
                 </div>
               </div>
 
-              {/* Bouton Boond */}
-              <div style={{ background: '#f0f0ff', border: '1.5px solid #1400FF', borderRadius: 12, padding: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1400FF', fontFamily: 'Montserrat, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    🔗 Générer depuis Boond
-                  </span>
-                  <button onClick={() => setShowBoondPanel(!showBoondPanel)} style={{ fontSize: 11, color: '#1400FF', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Montserrat', fontWeight: 600 }}>
-                    {showBoondPanel ? '▲ Masquer' : '▼ Afficher'}
-                  </button>
-                </div>
-                {showBoondPanel && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input
-                      value={boondCandidateId}
-                      onChange={e => setBoondCandidateId(e.target.value)}
-                      placeholder="ID candidat Boond (ex: 23358)"
-                      style={{ padding: '8px 12px', border: '1.5px solid #e0e0e0', borderRadius: 8, fontFamily: 'Montserrat', fontSize: 12, outline: 'none' }}
-                      onFocus={e => e.target.style.borderColor = '#1400FF'}
-                      onBlur={e => e.target.style.borderColor = '#e0e0e0'}
-                    />
-                    <input
-                      value={boondOpportunityId}
-                      onChange={e => setBoondOpportunityId(e.target.value)}
-                      placeholder="ID besoin Boond (optionnel, ex: 1269)"
-                      style={{ padding: '8px 12px', border: '1.5px solid #e0e0e0', borderRadius: 8, fontFamily: 'Montserrat', fontSize: 12, outline: 'none' }}
-                      onFocus={e => e.target.style.borderColor = '#1400FF'}
-                      onBlur={e => e.target.style.borderColor = '#e0e0e0'}
-                    />
-                    <button
-                      onClick={generateFromBoond}
-                      disabled={loadingBoond}
-                      style={{
-                        padding: '10px 16px', background: loadingBoond ? '#c8c8e8' : '#1400FF',
-                        color: '#fff', border: 'none', borderRadius: 8,
-                        cursor: loadingBoond ? 'not-allowed' : 'pointer',
-                        fontFamily: 'Montserrat', fontSize: 12, fontWeight: 700
-                      }}
-                    >
-                      {loadingBoond ? '⏳ Génération...' : '🔗 Générer depuis Boond'}
-                    </button>
-                  </div>
-                )}
-              </div>
+
 
               {/* Generate button */}
               <button
