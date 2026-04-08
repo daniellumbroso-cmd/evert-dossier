@@ -18,11 +18,9 @@ export default async function handler(req, res) {
   if (!dossier) return res.status(400).json({ error: 'Dossier manquant' })
 
   try {
-    // 1. Générer le PPTX
     const { buildPptx } = await import('./pptx-builder.js')
     const pptxBuffer = await buildPptx(dossier)
 
-    // 2. Auth Google avec refresh token automatique
     const auth = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET
@@ -31,23 +29,19 @@ export default async function handler(req, res) {
       access_token: session.access_token,
       refresh_token: session.refresh_token
     })
-
-    // Refresh automatique si access_token expiré
-    auth.on('tokens', (tokens) => {
-      if (tokens.access_token) {
-        // Le nouveau token est utilisé automatiquement par le client
-        console.log('Token refreshed')
-      }
-    })
+    auth.on('tokens', (tokens) => { if (tokens.access_token) console.log('Token refreshed') })
 
     const drive = google.drive({ version: 'v3', auth })
 
-    const fileName = `Dossier Ever"T — ${dossier.nom} — ${new Date().toLocaleDateString('fr-FR')}.pptx`
+    const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')
+    const safeName = dossier.nom.replace(/[^a-zA-Z0-9À-ÿ\s]/g, '').trim()
+    const fileName = `Dossier EverT — ${safeName} — ${date}.pptx`
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
 
     const { Readable } = await import('stream')
     const stream = Readable.from(pptxBuffer)
 
+    // Upload PPTX natif SANS conversion Google Slides
     const file = await drive.files.create({
       requestBody: {
         name: fileName,
@@ -58,19 +52,24 @@ export default async function handler(req, res) {
         mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         body: stream
       },
-      fields: 'id, name, webViewLink'
+      fields: 'id, name, webViewLink, webContentLink'
     })
 
-    res.json({ success: true, docUrl: file.data.webViewLink, fileId: file.data.id, title: fileName })
+    // webViewLink = ouvrir dans Drive (viewer PPTX, pas conversion Slides)
+    // webContentLink = lien de téléchargement direct
+    res.json({
+      success: true,
+      docUrl: file.data.webViewLink,           // Ouvrir dans Drive
+      downloadUrl: file.data.webContentLink,   // Télécharger directement
+      fileId: file.data.id,
+      title: fileName
+    })
 
   } catch (err) {
     console.error('Drive PPTX error:', err)
-
-    // Si token expiré → forcer re-auth côté client
     if (err.message?.includes('invalid_grant') || err.message?.includes('Invalid Credentials') || err.status === 401) {
       return res.status(401).json({ error: 'SESSION_EXPIRED' })
     }
-
     res.status(500).json({ error: 'Erreur Google Drive : ' + err.message })
   }
 }

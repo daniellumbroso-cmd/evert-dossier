@@ -28,6 +28,7 @@ export default function AppPage() {
   const [dossier, setDossier] = useState(null)
   const [saving, setSaving] = useState(false)
   const [savedUrl, setSavedUrl] = useState(null)
+  const [savedDownloadUrl, setSavedDownloadUrl] = useState(null)
   const [showPushPanel, setShowPushPanel] = useState(false)
   const [prospectInfo, setProspectInfo] = useState('')
   const [prospectPdf, setProspectPdf] = useState(null)
@@ -91,6 +92,7 @@ export default function AppPage() {
     setLoading(true)
     setDossier(null)
     setSavedUrl(null)
+    setSavedDownloadUrl(null)
     setPushResult(null)
     setPushReady(false)
     setCurrentStep(0)
@@ -213,6 +215,7 @@ export default function AppPage() {
       }
       if (!response.ok) throw new Error(data.error || 'Erreur Drive')
       setSavedUrl(data.docUrl)
+      setSavedDownloadUrl(data.downloadUrl || data.docUrl)
       toast.success('Sauvegardé dans Google Drive !')
     } catch (err) {
       toast.error(err.message)
@@ -725,7 +728,7 @@ export default function AppPage() {
                 {/* Save to Drive */}
                 {savedUrl ? (
                   <a
-                    href={savedUrl}
+                    href={savedDownloadUrl || savedUrl}
                     target="_blank"
                     rel="noreferrer"
                     style={{
@@ -735,7 +738,7 @@ export default function AppPage() {
                       display: 'flex', alignItems: 'center', gap: 6
                     }}
                   >
-                    ✓ Ouvrir dans Google Drive (Slides)
+                    ✓ Ouvrir dans Google Drive (PPTX)
                   </a>
                 ) : (
                   <button
@@ -750,7 +753,7 @@ export default function AppPage() {
                       display: 'flex', alignItems: 'center', gap: 6
                     }}
                   >
-                    {saving ? '⏳ Sauvegarde...' : '☁️ Sauvegarder Slides dans Drive'}
+                    {saving ? '⏳ Sauvegarde...' : '☁️ Sauvegarder dans Drive'}
                   </button>
                 )}
                 {/* Bouton Mail Push avec badge */}
