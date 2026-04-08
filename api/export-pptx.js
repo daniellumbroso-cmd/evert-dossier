@@ -185,6 +185,15 @@ function _renderExperienceSlide(pres, exp, isContinued) {
   const line = (text, opts = {}) => {
     runs.push({ text, options: { fontSize: fSize, fontFace: 'Montserrat', color: BLACK, breakLine: true, ...opts } })
   }
+  const bulletLine = (text, opts = {}) => {
+    const parts = parseRichText(text, { fontSize: fSize, color: BLACK, fontFace: 'Montserrat', ...opts })
+    parts.forEach((p, i) => {
+      runs.push({
+        text: p.text,
+        options: { ...p.options, bullet: i === 0, breakLine: i === parts.length - 1, paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0 }
+      })
+    })
+  }
   const sectionTitle = (text) => {
     runs.push({ text, options: { fontSize: sectionFSize, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: isCompact ? 4 : 8, paraSpaceAfter: spaceAfter } })
   }
@@ -222,7 +231,11 @@ function _renderExperienceSlide(pres, exp, isContinued) {
       if (sub.dates) subRoleDates(sub.dates)
       sub.activites?.forEach(act => {
         sectionTitle(act.theme)
-        act.points?.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+        if (act.points && act.points.length > 0) {
+          act.points.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+        } else if (act.texte) {
+          bulletLine(act.texte)
+        }
       })
       if (subIdx < exp.sub_roles.length - 1) br()
     })
@@ -230,7 +243,11 @@ function _renderExperienceSlide(pres, exp, isContinued) {
   } else {
     exp.activites?.forEach(act => {
       sectionTitle(act.theme)
-      act.points?.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+      if (act.points && act.points.length > 0) {
+        act.points.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+      } else if (act.texte) {
+        bulletLine(act.texte)
+      }
       br()
     })
   }

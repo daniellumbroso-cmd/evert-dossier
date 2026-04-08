@@ -49,6 +49,7 @@ RÈGLES DE RÉDACTION :
 - Résultats chiffrés si disponibles dans le CV source
 - Ton professionnel mais vivant, jamais robotique
 - RÈGLE ABSOLUE ANTI-INVENTION : Ne jamais inventer, déduire ou extrapoler d'informations non explicitement présentes dans le CV source. Si une information est absente, ne pas la mentionner. Si tu n'es pas certain d'une donnée, ne pas l'inclure.
+- RÈGLE BULLETS OBLIGATOIRE : Dans chaque activité, chaque item doit être dans le tableau "points" — jamais de texte libre hors bullets. Si un thème a plusieurs actions, chaque action est un point séparé dans "points". Ne jamais mettre plusieurs actions dans un seul point. Exemple correct : {"theme": "Pilotage technique", "points": ["Pilotage du développement Java/Angular", "Co-conception des flux de données et interfaces API", "Modélisation des données SQL"]}. Exemple INCORRECT : {"theme": "Pilotage technique", "points": ["Pilotage du développement Java/Angular Co-conception des flux..."]}
 - RÈGLE DE COMPLÉTUDE : Ne jamais tronquer, résumer ou limiter le contenu des expériences. Chaque activité, point, enjeu et résultat présent dans le CV doit être retranscrit intégralement. Plus une expérience est riche, plus le dossier doit être détaillé. Ne pas se limiter à 1, 2 ou 3 points par thème — retranscrire tout ce qui est pertinent.
 - RÈGLE DE LISIBILITÉ : Si une expérience a peu de contenu (moins de 8 points au total), regrouper les activités sous 2-3 thèmes maximum plutôt que de créer 5-6 thèmes avec 1 point chacun. Un thème avec 1 seul point doit être fusionné avec un thème proche.
 
