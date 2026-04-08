@@ -34,14 +34,14 @@ export default async function handler(req, res) {
     const drive = google.drive({ version: 'v3', auth })
 
     const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')
-    const safeName = dossier.nom.replace(/[^a-zA-Z0-9À-ÿ\s]/g, '').trim()
+    const safeName = dossier.nom.replace(/["]/g, '').trim()
     const fileName = `Dossier EverT — ${safeName} — ${date}.pptx`
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
 
     const { Readable } = await import('stream')
     const stream = Readable.from(pptxBuffer)
 
-    // Upload PPTX natif SANS conversion Google Slides
+    // 1. Upload PPTX natif
     const file = await drive.files.create({
       requestBody: {
         name: fileName,
@@ -52,22 +52,41 @@ export default async function handler(req, res) {
         mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         body: stream
       },
-      fields: 'id, name, webViewLink'
+      fields: 'id, name'
     })
 
-    // webViewLink = ouvrir dans Drive (viewer PPTX, pas conversion Slides)
-    // webContentLink = lien de téléchargement direct
     const fileId = file.data.id
-    // Lien viewer Drive natif (pas conversion Slides)
+
+    // 2. Partager avec le domaine ever-t.fr (lecture)
+    try {
+      await drive.permissions.create({
+        fileId,
+        requestBody: {
+          type: 'domain',
+          role: 'reader',
+          domain: 'ever-t.fr'
+        }
+      })
+    } catch (permErr) {
+      // Si le partage domaine échoue, essayer "anyone with link"
+      console.log('Domain share failed, trying anyone:', permErr.message)
+      try {
+        await drive.permissions.create({
+          fileId,
+          requestBody: { type: 'anyone', role: 'reader' }
+        })
+      } catch (e) {
+        console.log('Permission fallback also failed:', e.message)
+      }
+    }
+
+    // 3. Retourner le lien Drive
     const viewUrl = `https://drive.google.com/file/d/${fileId}/view`
-    // Lien téléchargement direct Drive (pas usercontent)
-    const downloadUrl = `https://drive.google.com/uc?id=${fileId}&export=download`
 
     res.json({
       success: true,
       docUrl: viewUrl,
-      downloadUrl: downloadUrl,
-      fileId: fileId,
+      fileId,
       title: fileName
     })
 

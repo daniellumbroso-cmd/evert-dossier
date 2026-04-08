@@ -728,8 +728,8 @@ export default function AppPage() {
                 {/* Save to Drive */}
                 {savedUrl ? (
                   <a
-                    href={savedDownloadUrl || savedUrl}
-                    target="_blank"
+                    href={savedUrl}
+                    target="_blank" rel="noopener noreferrer"
                     rel="noreferrer"
                     style={{
                       padding: '9px 16px', borderRadius: 8, textDecoration: 'none',
