@@ -237,7 +237,7 @@ export default function AppPage() {
   }
 
   const loadBoondBesoin = async () => {
-    if (!boondOpportunityId.trim()) return toast.error('Renseignez l'ID besoin Boond')
+    if (!boondOpportunityId.trim()) return toast.error("Renseignez l'ID besoin Boond")
     setLoadingBoond(true)
     setBoondBesoinPreview(null)
     try {
