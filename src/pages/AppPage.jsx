@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
@@ -43,6 +43,7 @@ export default function AppPage() {
   const [loadingBoond, setLoadingBoond] = useState(false)
   const [boondBesoinPreview, setBoondBesoinPreview] = useState(null)
   const [ajustements, setAjustements] = useState([])
+  const abortControllerRef = React.useRef(null)
 
   const onDrop = useCallback(acceptedFiles => {
     const file = acceptedFiles[0]
@@ -63,9 +64,27 @@ export default function AppPage() {
     }
   }
 
+  const cancelGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setLoading(false)
+    setCurrentStep(-1)
+    toast('Génération annulée')
+  }
+
   const generate = async () => {
     if (tab === 'pdf' && !pdfFile) return toast.error('Sélectionnez un PDF')
     if (tab === 'text' && !cvText.trim()) return toast.error('Collez le contenu du CV')
+
+    // Auto-chargement Boond si ID saisi mais pas encore chargé
+    if (besoinMode === 'boond' && boondOpportunityId.trim() && !boondBesoinPreview) {
+      await loadBoondBesoin()
+    }
+
+    const controller = new AbortController()
+    abortControllerRef.current = controller
 
     setLoading(true)
     setDossier(null)
@@ -76,7 +95,6 @@ export default function AppPage() {
 
     const stepsPromise = simulateSteps()
 
-    // Lancer le push en parallèle (avec ou sans prospect)
     const pushFormData = new FormData()
     pushFormData.append('mode', 'push')
     if (prospectInfoUpload) pushFormData.append('prospectInfo', prospectInfoUpload)
@@ -92,7 +110,8 @@ export default function AppPage() {
 
       const response = await fetch('/api/generate', {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       })
 
       await stepsPromise
@@ -108,7 +127,6 @@ export default function AppPage() {
       setCurrentStep(STEPS.length)
       toast.success('Dossier généré !')
 
-      // Maintenant qu'on a le dossier, lancer le push
       pushFormData.append('dossier', JSON.stringify(data.dossier))
       fetch('/api/generate', { method: 'POST', body: pushFormData })
         .then(r => r.json())
@@ -122,9 +140,11 @@ export default function AppPage() {
         .catch(() => {})
 
     } catch (err) {
+      if (err.name === 'AbortError') return
       toast.error(err.message)
       setCurrentStep(-1)
     } finally {
+      abortControllerRef.current = null
       setLoading(false)
     }
   }
@@ -593,11 +613,10 @@ export default function AppPage() {
 
               {/* Generate button */}
               <button
-                onClick={generate}
-                disabled={loading}
+                onClick={loading ? cancelGeneration : generate}
                 style={{
                   width: '100%', padding: '16px',
-                  background: loading ? '#c8c8e8' : '#1400FF',
+                  background: loading ? '#ff3b30' : '#1400FF',
                   color: '#fff',
                   border: 'none', borderRadius: 12, cursor: loading ? 'not-allowed' : 'pointer',
                   fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '0.04em',
@@ -609,7 +628,7 @@ export default function AppPage() {
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(20,0,255,0.25)' }}
               >
                 <Sparkles size={18} />
-                {loading ? 'Génération en cours...' : 'Générer le dossier'}
+                {loading ? '✕ Annuler la génération' : 'Générer le dossier'}
               </button>
 
               {/* Progress steps */}

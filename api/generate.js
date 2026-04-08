@@ -50,6 +50,7 @@ RÈGLES DE RÉDACTION :
 - Ton professionnel mais vivant, jamais robotique
 - RÈGLE ABSOLUE ANTI-INVENTION : Ne jamais inventer, déduire ou extrapoler d'informations non explicitement présentes dans le CV source. Si une information est absente, ne pas la mentionner. Si tu n'es pas certain d'une donnée, ne pas l'inclure.
 - RÈGLE DE COMPLÉTUDE : Ne jamais tronquer, résumer ou limiter le contenu des expériences. Chaque activité, point, enjeu et résultat présent dans le CV doit être retranscrit intégralement. Plus une expérience est riche, plus le dossier doit être détaillé. Ne pas se limiter à 1, 2 ou 3 points par thème — retranscrire tout ce qui est pertinent.
+- RÈGLE DE LISIBILITÉ : Si une expérience a peu de contenu (moins de 8 points au total), regrouper les activités sous 2-3 thèmes maximum plutôt que de créer 5-6 thèmes avec 1 point chacun. Un thème avec 1 seul point doit être fusionné avec un thème proche.
 
 MISE EN GRAS des mots-clés importants :
 - Dans les textes (a_propos, projet, points d'activités, enjeux, résultats), entoure les mots-clés techniques importants avec **double astérisques** : ex "mise en place d'un pipeline **dbt** sur **BigQuery**"

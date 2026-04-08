@@ -136,7 +136,7 @@ function countExpPoints(exp) {
 function addExperienceSlide(pres, exp) {
   // Seuil de split : si trop de points, on divise en 2 slides
   const pointCount = countExpPoints(exp)
-  const needsSplit = pointCount > 22
+  const needsSplit = pointCount > 18
 
   if (needsSplit && exp.activites && exp.activites.length > 2) {
     // Split : première moitié sur slide 1, deuxième moitié sur slide 2
@@ -155,8 +155,8 @@ function _renderExperienceSlide(pres, exp, isContinued) {
   slide.background = { color: LIGHT }
 
   const pointCount = countExpPoints(exp)
-  const isCompact = pointCount > 12
-  const isDense = pointCount > 18
+  const isCompact = pointCount > 10
+  const isDense = pointCount > 16
   const fSize = isDense ? 8 : isCompact ? 8.5 : 9.5
   const spaceAfter = isDense ? 1 : isCompact ? 2 : 4
   const spaceBr = isDense ? 2 : isCompact ? 3 : 6
