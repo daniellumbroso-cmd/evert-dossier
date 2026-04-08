@@ -24,33 +24,34 @@ export default async function handler(req, res) {
   const jwt = buildBoondJWT(userToken, clientToken, clientKey)
   const headers = { 'X-Jwt-Client-BoondManager': jwt, 'Content-Type': 'application/json', 'Accept': 'application/json' }
 
-  try {
-    // Tester les différents endpoints pour récupérer le CV PDF de Rudy
-    const results = {}
+  const results = {}
 
-    // Option 1 : /candidates/{id}/resumes
-    const r1 = await fetch(`${apiUrl}candidates/23358/resumes`, { headers })
-    results.resumes_status = r1.status
-    if (r1.ok) {
-      const d = await r1.json()
-      results.resumes_data = JSON.stringify(d).substring(0, 500)
+  // Tester différentes variantes du download-center pour trouver le CV
+  const variants = [
+    `download-center?typeOf=candidate&id=23358`,
+    `download-center?candidateId=23358`,
+    `download-center?resourceId=23358&resourceType=candidate`,
+    `candidates/23358/files`,
+    `candidates/23358/documents`,
+    `candidates/23358?include=files`,
+    `candidates/23358?include=resumes`,
+  ]
+
+  for (const v of variants) {
+    try {
+      const r = await fetch(`${apiUrl}${v}`, { headers })
+      const text = await r.text()
+      let data
+      try { data = JSON.parse(text) } catch { data = text.substring(0, 200) }
+      results[v] = {
+        status: r.status,
+        has_data: Array.isArray(data?.data) ? data.data.length : 'n/a',
+        preview: JSON.stringify(data).substring(0, 200)
+      }
+    } catch (e) {
+      results[v] = { error: e.message }
     }
-
-    // Option 2 : /download-center avec le candidat
-    const r2 = await fetch(`${apiUrl}download-center?resourceTypeOf=candidate&resourceId=23358`, { headers })
-    results.download_center_status = r2.status
-    if (r2.ok) {
-      const d = await r2.json()
-      results.download_center_data = JSON.stringify(d).substring(0, 500)
-    }
-
-    // Option 3 : /candidates/{id} — chercher les relationships
-    const r3 = await fetch(`${apiUrl}candidates/23358`, { headers })
-    const d3 = await r3.json()
-    results.relationships = JSON.stringify(d3?.data?.relationships || {}).substring(0, 500)
-
-    res.json(results)
-  } catch (err) {
-    res.status(500).json({ error: err.message })
   }
+
+  res.json(results)
 }
