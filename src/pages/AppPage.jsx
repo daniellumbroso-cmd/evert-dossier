@@ -243,19 +243,14 @@ export default function AppPage() {
     try {
       const r = await fetch('/api/boond-opportunity?id=' + boondOpportunityId.trim())
       const data = await r.json()
-      if (!r.ok || !data.results) throw new Error('Besoin introuvable')
-      const info = data.results['opportunities/' + boondOpportunityId.trim() + '/information']
-      if (!info || info.status !== 200) throw new Error('Besoin introuvable')
-      const attrs = info.data?.data?.attributes
-      const included = info.data?.included || []
-      const company = included.find(i => i.type === 'company')
-      const contact = included.find(i => i.type === 'contact')
+      if (!r.ok || data.error) throw new Error(data.error || 'Besoin introuvable')
+      if (!data.title) throw new Error('Besoin introuvable')
       const preview = {
-        title: attrs?.title || '',
-        company: company?.attributes?.name || '',
-        contact: contact ? (contact.attributes.firstName + ' ' + contact.attributes.lastName).trim() : '',
-        description: attrs?.description || '',
-        tjm: attrs?.estimatesExcludingTax ? attrs.estimatesExcludingTax + '€' : ''
+        title: data.title,
+        company: data.company || '',
+        contact: data.contact || '',
+        description: data.description || '',
+        tjm: data.tjm || ''
       }
       setBoondBesoinPreview(preview)
       setBesoinClient(preview.title + '\n\nClient : ' + preview.company + '\n\n' + preview.description)
