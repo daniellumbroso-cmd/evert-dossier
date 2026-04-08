@@ -79,8 +79,10 @@ export default function AppPage() {
     if (tab === 'text' && !cvText.trim()) return toast.error('Collez le contenu du CV')
 
     // Auto-chargement Boond si ID saisi mais pas encore chargé
+    let besoinPourGeneration = besoinClient
     if (besoinMode === 'boond' && boondOpportunityId.trim() && !boondBesoinPreview) {
-      await loadBoondBesoin()
+      const loaded = await loadBoondBesoin()
+      if (loaded) besoinPourGeneration = loaded
     }
 
     const controller = new AbortController()
@@ -104,7 +106,7 @@ export default function AppPage() {
       const formData = new FormData()
       formData.append('community', community)
       if (instructions) formData.append('instructions', instructions)
-      if (besoinClient) formData.append('besoinClient', besoinClient)
+      if (besoinPourGeneration) formData.append('besoinClient', besoinPourGeneration)
       if (tab === 'pdf' && pdfFile) formData.append('pdf', pdfFile)
       if (tab === 'text') formData.append('cvText', cvText)
 
@@ -275,10 +277,13 @@ export default function AppPage() {
         tjm: data.tjm || ''
       }
       setBoondBesoinPreview(preview)
-      setBesoinClient(preview.title + '\n\nClient : ' + preview.company + '\n\n' + preview.description)
+      const besoinText = preview.title + '\n\nClient : ' + preview.company + '\n\n' + preview.description
+      setBesoinClient(besoinText)
       toast.success('Besoin chargé depuis Boond !')
+      return besoinText
     } catch (err) {
       toast.error(err.message)
+      return null
     } finally {
       setLoadingBoond(false)
     }
