@@ -18,66 +18,34 @@ export default async function handler(req, res) {
     })
   }
 
-  // Nettoyer l'URL de base
-  const cleanBase = baseUrl.replace(/\/$/, '')
+  const apiUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'
 
-  // X-Jwt-Client-BoondManager : format "clientToken:clientKey:userToken" encodé en base64
-  const authString = `${clientToken}:${clientKey}:${userToken}`
-  const authHeader = Buffer.from(authString).toString('base64')
+  // Format correct du JWT Boond : clientToken:clientKey:userToken en base64
+  const credentials = `${clientToken}:${clientKey}:${userToken}`
+  const authHeader = Buffer.from(credentials).toString('base64')
 
-  const results = {}
-
-  // Test 1 : /application/status
   try {
-    const r = await fetch(`${cleanBase}/api/application/status`, {
+    const response = await fetch(`${apiUrl}application/status`, {
+      method: 'GET',
       headers: {
         'X-Jwt-Client-BoondManager': authHeader,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }
     })
-    const text = await r.text()
-    results.status_with_api = {
-      http: r.status,
-      isJson: text.startsWith('{') || text.startsWith('['),
-      preview: text.substring(0, 200)
-    }
-  } catch(e) { results.status_with_api = { error: e.message } }
 
-  // Test 2 : sans /api/ dans l'URL
-  try {
-    const r = await fetch(`${cleanBase}/application/status`, {
-      headers: {
-        'X-Jwt-Client-BoondManager': authHeader,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
+    const text = await response.text()
+    let data
+    try { data = JSON.parse(text) } catch { data = text.substring(0, 500) }
+
+    res.json({
+      status: response.status,
+      ok: response.ok,
+      auth_format: 'clientToken:clientKey:userToken → base64',
+      boond_response: data
     })
-    const text = await r.text()
-    results.status_without_api = {
-      http: r.status,
-      isJson: text.startsWith('{') || text.startsWith('['),
-      preview: text.substring(0, 200)
-    }
-  } catch(e) { results.status_without_api = { error: e.message } }
 
-  // Test 3 : Basic auth
-  try {
-    const basicAuth = Buffer.from(`${userToken}:`).toString('base64')
-    const r = await fetch(`${cleanBase}/api/application/status`, {
-      headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    })
-    const text = await r.text()
-    results.basic_auth = {
-      http: r.status,
-      isJson: text.startsWith('{') || text.startsWith('['),
-      preview: text.substring(0, 200)
-    }
-  } catch(e) { results.basic_auth = { error: e.message } }
-
-  res.json({ baseUrl: cleanBase, results })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 }
