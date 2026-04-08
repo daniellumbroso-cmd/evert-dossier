@@ -122,9 +122,29 @@ function addResumeSlide(pres, d) {
   slide.addText(techItems, { x: 0.5, y, w: W - 0.9, h: 1.5 })
 }
 
+function countExpPoints(exp) {
+  let count = 0
+  if (exp.sub_roles) {
+    exp.sub_roles.forEach(sub => sub.activites?.forEach(act => { count += act.points?.length || 0 }))
+  } else {
+    exp.activites?.forEach(act => { count += act.points?.length || 0 })
+  }
+  count += (exp.enjeux?.length || 0) + (exp.resultats?.length || 0)
+  return count
+}
+
 function addExperienceSlide(pres, exp) {
   const slide = pres.addSlide()
   slide.background = { color: LIGHT }
+
+  // Ajustement dynamique selon la densité du contenu
+  const pointCount = countExpPoints(exp)
+  const isCompact = pointCount > 12
+  const isDense = pointCount > 18
+  const fSize = isDense ? 8 : isCompact ? 8.5 : 9.5
+  const spaceAfter = isDense ? 1 : isCompact ? 2 : 4
+  const spaceBr = isDense ? 2 : isCompact ? 3 : 6
+  const sectionFSize = isDense ? 9 : isCompact ? 9.5 : 10.5
 
   // Ligne bleue décorative en haut
   slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })
@@ -146,12 +166,12 @@ function addExperienceSlide(pres, exp) {
 
   const runs = []
 
-  const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 4, fontFace: 'Montserrat', color: BLACK, paraSpaceAfter: 6 } })
+  const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 4, fontFace: 'Montserrat', color: BLACK, paraSpaceAfter: spaceBr } })
   const line = (text, opts = {}) => {
-    runs.push({ text, options: { fontSize: 9.5, fontFace: 'Montserrat', color: BLACK, breakLine: true, ...opts } })
+    runs.push({ text, options: { fontSize: fSize, fontFace: 'Montserrat', color: BLACK, breakLine: true, ...opts } })
   }
   const sectionTitle = (text) => {
-    runs.push({ text, options: { fontSize: 10.5, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: 8, paraSpaceAfter: 4 } })
+    runs.push({ text, options: { fontSize: sectionFSize, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: isCompact ? 4 : 8, paraSpaceAfter: spaceAfter } })
   }
   const subRoleTitle = (text) => {
     runs.push({ text, options: { fontSize: 10, fontFace: 'Montserrat', color: BLUE, bold: true, breakLine: true, paraSpaceBefore: 10, paraSpaceAfter: 4 } })
@@ -160,7 +180,7 @@ function addExperienceSlide(pres, exp) {
     runs.push({ text, options: { fontSize: 9, fontFace: 'Montserrat', color: BLACK, italic: true, breakLine: true, paraSpaceAfter: 4 } })
   }
   const bulletRich = (text, isLast) => {
-    const parts = parseRichText(text, { fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' })
+    const parts = parseRichText(text, { fontSize: fSize, color: BLACK, fontFace: 'Montserrat' })
     parts.forEach((p, i) => {
       const isFirstOfPart = i === 0
       const isLastOfPart = i === parts.length - 1
@@ -170,7 +190,7 @@ function addExperienceSlide(pres, exp) {
           ...p.options,
           bullet: isFirstOfPart ? true : false,
           breakLine: isLastOfPart ? true : false,
-          paraSpaceAfter: isLastOfPart ? 4 : 0,
+          paraSpaceAfter: isLastOfPart ? spaceAfter : 0,
         }
       })
     })
