@@ -177,8 +177,8 @@ function _renderExpSlide(pres, exp, isContinued) {
   const isCompact = pointCount > 10
   const isDense = pointCount > 16
   const fSize = isDense ? 8 : isCompact ? 8.5 : 9.5
-  const spaceAfter = isDense ? 1 : isCompact ? 2 : 4
-  const spaceBr = isDense ? 2 : isCompact ? 3 : 6
+  const spaceAfter = isDense ? 1 : isCompact ? 4 : 8
+  const spaceBr = isDense ? 2 : isCompact ? 5 : 10
   const sectionFSize = isDense ? 9 : isCompact ? 9.5 : 10.5
 
   slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })

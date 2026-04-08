@@ -52,16 +52,22 @@ export default async function handler(req, res) {
         mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         body: stream
       },
-      fields: 'id, name, webViewLink, webContentLink'
+      fields: 'id, name, webViewLink'
     })
 
     // webViewLink = ouvrir dans Drive (viewer PPTX, pas conversion Slides)
     // webContentLink = lien de téléchargement direct
+    const fileId = file.data.id
+    // Lien viewer Drive natif (pas conversion Slides)
+    const viewUrl = `https://drive.google.com/file/d/${fileId}/view`
+    // Lien téléchargement direct Drive (pas usercontent)
+    const downloadUrl = `https://drive.google.com/uc?id=${fileId}&export=download`
+
     res.json({
       success: true,
-      docUrl: file.data.webViewLink,           // Ouvrir dans Drive
-      downloadUrl: file.data.webContentLink,   // Télécharger directement
-      fileId: file.data.id,
+      docUrl: viewUrl,
+      downloadUrl: downloadUrl,
+      fileId: fileId,
       title: fileName
     })
 
