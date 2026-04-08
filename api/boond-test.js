@@ -25,16 +25,14 @@ export default async function handler(req, res) {
   const headers = { 'X-Jwt-Client-BoondManager': jwt, 'Content-Type': 'application/json', 'Accept': 'application/json' }
 
   const results = {}
+  const opportunityId = req.query.id || '1269'
 
-  // Tester différentes variantes du download-center pour trouver le CV
+  // Tester les endpoints opportunity
   const variants = [
-    `download-center?typeOf=candidate&id=23358`,
-    `download-center?candidateId=23358`,
-    `download-center?resourceId=23358&resourceType=candidate`,
-    `candidates/23358/files`,
-    `candidates/23358/documents`,
-    `candidates/23358?include=files`,
-    `candidates/23358?include=resumes`,
+    `opportunities/${opportunityId}`,
+    `opportunities/${opportunityId}/actions`,
+    `opportunities/${opportunityId}/information`,
+    `opportunities/${opportunityId}/positionings`,
   ]
 
   for (const v of variants) {
@@ -42,16 +40,15 @@ export default async function handler(req, res) {
       const r = await fetch(`${apiUrl}${v}`, { headers })
       const text = await r.text()
       let data
-      try { data = JSON.parse(text) } catch { data = text.substring(0, 200) }
+      try { data = JSON.parse(text) } catch { data = text.substring(0, 500) }
       results[v] = {
         status: r.status,
-        has_data: Array.isArray(data?.data) ? data.data.length : 'n/a',
-        preview: JSON.stringify(data).substring(0, 200)
+        data: data
       }
     } catch (e) {
       results[v] = { error: e.message }
     }
   }
 
-  res.json(results)
+  res.json({ opportunityId, results })
 }
