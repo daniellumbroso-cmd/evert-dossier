@@ -222,7 +222,12 @@ export default function AppPage() {
   }
 
   const copyToClipboard = async (text, type) => {
-    await navigator.clipboard.writeText(text)
+    // Pour le corps : nettoyer le gras ** pour Gmail, garder les tirets comme tirets
+    let copyText = text
+    if (type === 'corps') {
+      copyText = text.replace(/**([^*]+)**/g, '$1') // retirer ** mais garder le texte
+    }
+    await navigator.clipboard.writeText(copyText)
     if (type === 'objet') { setCopiedObjet(true); setTimeout(() => setCopiedObjet(false), 2000) }
     if (type === 'corps') { setCopiedCorps(true); setTimeout(() => setCopiedCorps(false), 2000) }
   }
@@ -771,9 +776,23 @@ export default function AppPage() {
                           {copiedCorps ? '✓ Copié !' : 'Copier'}
                         </button>
                       </div>
-                      <pre style={{ margin: 0, fontFamily: 'Montserrat', fontSize: 12, color: '#111', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {pushResult.corps}
-                      </pre>
+                      <div style={{ fontFamily: 'Montserrat', fontSize: 12, color: '#111', lineHeight: 1.8 }}>
+                        {pushResult.corps.split('\n').map((line, i) => {
+                          const renderBold = (text) => text.split(/(\*\*[^*]+\*\*)/g).map((p, j) =>
+                            p.startsWith('**') && p.endsWith('**')
+                              ? <strong key={j} style={{ fontWeight: 700 }}>{p.slice(2,-2)}</strong>
+                              : <span key={j}>{p}</span>
+                          )
+                          if (line.startsWith('- ')) return (
+                            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 3 }}>
+                              <span style={{ color: '#1400FF', fontWeight: 700, flexShrink: 0 }}>•</span>
+                              <span>{renderBold(line.slice(2))}</span>
+                            </div>
+                          )
+                          if (!line.trim()) return <div key={i} style={{ height: 8 }} />
+                          return <div key={i}>{renderBold(line)}</div>
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}

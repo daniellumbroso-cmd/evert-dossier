@@ -150,21 +150,32 @@ Je suis [NOM_EXPEDITEUR], [ROLE] d'ever"T | Groupe Wold : société d'innovation
 [Prénom candidat], un de nos [profil] spécialisé[s] en [stack principale], nous a exprimé son souhait de rejoindre [Entreprise prospect].
 
 Ses points forts :
-• Point fort 1 (le plus impactant pour CE prospect)
-• Point fort 2
-• Point fort 3
-• Point fort 4
-• Point fort 5 max
+- [point fort 1]
+- [point fort 2]
+- [point fort 3]
+- [point fort 4]
+- [point fort 5 max]
 
 Je suis disponible pour organiser un échange [timing]. Qu'en pensez-vous ?
 
 Je vous souhaite une très belle journée,
 [SIGNATURE]
 
-RÈGLES :
-- Mail court et dense, chaque bullet = valeur concrète pour LE prospect
+RÈGLES BULLETS :
+- Utiliser le tiret "-" comme marqueur de bullet (pas "•") — compatible copier-coller Gmail
+- Chaque bullet = MAX 10 mots, ultra-condensé, percutant
+- Format : "[Compétence clé] – [résultat ou contexte court]"
+- Exemples corrects : "dbt + Databricks – stacks modernes maîtrisées" / "Decathlon – refonte BI 25 data"
+- Jamais de phrase complète dans un bullet
+
+RÈGLES MISE EN GRAS :
+- Dans le corps du mail (pas les bullets), mettre en gras avec **double astérisques** les infos clés en lien avec le prospect
+- Ex : si prospect manage une équipe data chez Generali → mettre en gras "**Data Manager**", "**Generali**", les technos qui matchent
+- Mettre en gras : prénom du candidat, stack principale, nom de l'entreprise prospect, 1-2 mots clés qui matchent le contexte prospect
+
+AUTRES RÈGLES :
 - Points forts matchés avec le contexte du prospect
-- Jamais d'invention — uniquement ce qui est dans le dossier
+- RÈGLE ABSOLUE ANTI-INVENTION : Ne mentionner QUE des technos, méthodes, concepts ou expériences qui apparaissent mot pour mot dans le dossier candidat. Aucune inférence, aucune extrapolation, aucun synonyme "proche". Si "Kimball" est dans le dossier, ne pas écrire "Data Mesh". Si "Databricks" est dans le dossier, ne pas écrire "Spark" sauf si Spark est explicitement mentionné. En cas de doute sur une information : ne pas l'inclure.
 - Ton professionnel, direct, légèrement chaleureux
 - "nous a exprimé son souhait de rejoindre X" = formule clé à conserver
 
