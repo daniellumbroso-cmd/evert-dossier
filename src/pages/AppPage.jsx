@@ -258,11 +258,7 @@ export default function AppPage() {
         tjm: attrs?.estimatesExcludingTax ? attrs.estimatesExcludingTax + '€' : ''
       }
       setBoondBesoinPreview(preview)
-      setBesoinClient(preview.title + '
-
-Client : ' + preview.company + '
-
-' + preview.description)
+      setBesoinClient(preview.title + '\n\nClient : ' + preview.company + '\n\n' + preview.description)
       toast.success('Besoin chargé depuis Boond !')
     } catch (err) {
       toast.error(err.message)
