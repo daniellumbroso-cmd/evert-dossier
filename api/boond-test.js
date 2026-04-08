@@ -25,51 +25,31 @@ export default async function handler(req, res) {
   const headers = { 'X-Jwt-Client-BoondManager': jwt, 'Content-Type': 'application/json', 'Accept': 'application/json' }
 
   try {
-    // 1. Opportunity ALEXI — tous les champs disponibles
-    const oppRes = await fetch(`${apiUrl}opportunities/1269`, { headers })
-    const oppRaw = await oppRes.json()
-    const oppAttrs = oppRaw?.data?.attributes || {}
-    const oppIncluded = oppRaw?.included || []
+    // Tester les différents endpoints pour récupérer le CV PDF de Rudy
+    const results = {}
 
-    // 2. Actions du besoin
-    const oppActionsRes = await fetch(`${apiUrl}opportunities/1269/actions?page[limit]=5`, { headers })
-    const oppActionsRaw = await oppActionsRes.json()
+    // Option 1 : /candidates/{id}/resumes
+    const r1 = await fetch(`${apiUrl}candidates/23358/resumes`, { headers })
+    results.resumes_status = r1.status
+    if (r1.ok) {
+      const d = await r1.json()
+      results.resumes_data = JSON.stringify(d).substring(0, 500)
+    }
 
-    // 3. Candidat Rudy — tous les attributs
-    const candidateRes = await fetch(`${apiUrl}candidates/23358`, { headers })
-    const candidateRaw = await candidateRes.json()
-    const candAttrs = candidateRaw?.data?.attributes || {}
+    // Option 2 : /download-center avec le candidat
+    const r2 = await fetch(`${apiUrl}download-center?resourceTypeOf=candidate&resourceId=23358`, { headers })
+    results.download_center_status = r2.status
+    if (r2.ok) {
+      const d = await r2.json()
+      results.download_center_data = JSON.stringify(d).substring(0, 500)
+    }
 
-    // 4. Actions candidat
-    const actionsRes = await fetch(`${apiUrl}candidates/23358/actions?page[limit]=5`, { headers })
-    const actionsRaw = await actionsRes.json()
+    // Option 3 : /candidates/{id} — chercher les relationships
+    const r3 = await fetch(`${apiUrl}candidates/23358`, { headers })
+    const d3 = await r3.json()
+    results.relationships = JSON.stringify(d3?.data?.relationships || {}).substring(0, 500)
 
-    res.json({
-      opportunity: {
-        all_attribute_keys: Object.keys(oppAttrs),
-        title: oppAttrs.title,
-        reference: oppAttrs.reference,
-        description: oppAttrs.description || oppAttrs.comment || oppAttrs.text || oppAttrs.notes || 'VIDE',
-        included_types: oppIncluded.map(i => i.type),
-        full_attrs: JSON.stringify(oppAttrs).substring(0, 1000)
-      },
-      opp_actions: (oppActionsRaw?.data || []).map(a => ({
-        text: (a.attributes?.text || a.attributes?.description || '').replace(/<[^>]*>/g, '').substring(0, 300),
-        date: a.attributes?.startDate
-      })),
-      candidate: {
-        firstName: candAttrs.firstName,
-        lastName: candAttrs.lastName,
-        title: candAttrs.title,
-        all_attribute_keys: Object.keys(candAttrs),
-        numberOfResumes: candAttrs.numberOfResumes
-      },
-      candidate_actions: (actionsRaw?.data || []).map(a => ({
-        text: (a.attributes?.text || a.attributes?.description || '').replace(/<[^>]*>/g, '').substring(0, 300),
-        date: a.attributes?.startDate
-      }))
-    })
-
+    res.json(results)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
