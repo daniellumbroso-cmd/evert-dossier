@@ -125,20 +125,59 @@ function addResumeSlide(pres, d) {
   slide.addText(techItems, { x: 0.5, y, w: W - 0.9, h: 1.5 })
 }
 
+function countExpPoints(exp) {
+  let count = 0
+  if (exp.sub_roles) {
+    exp.sub_roles.forEach(sub => sub.activites?.forEach(act => { count += act.points?.length || 0 }))
+  } else {
+    exp.activites?.forEach(act => { count += act.points?.length || 0 })
+  }
+  count += (exp.enjeux?.length || 0) + (exp.resultats?.length || 0)
+  return count
+}
+
 function addExperienceSlide(pres, exp) {
+  const pointCount = countExpPoints(exp)
+  const needsSplit = pointCount > 18
+
+  if (needsSplit && exp.activites && exp.activites.length > 2) {
+    const mid = Math.ceil(exp.activites.length / 2)
+    const exp1 = { ...exp, activites: exp.activites.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, activites: exp.activites.slice(mid), projet: null }
+    _renderExpSlide(pres, exp1, true)
+    _renderExpSlide(pres, exp2, false)
+  } else if (needsSplit && exp.sub_roles && exp.sub_roles.length > 1) {
+    const mid = Math.ceil(exp.sub_roles.length / 2)
+    const exp1 = { ...exp, sub_roles: exp.sub_roles.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, sub_roles: exp.sub_roles.slice(mid), projet: null }
+    _renderExpSlide(pres, exp1, true)
+    _renderExpSlide(pres, exp2, false)
+  } else {
+    _renderExpSlide(pres, exp, false)
+  }
+}
+
+function _renderExpSlide(pres, exp, isContinued) {
   const slide = pres.addSlide()
   slide.background = { color: LIGHT }
 
-  // Ligne bleue décorative en haut
+  const pointCount = countExpPoints(exp)
+  const isCompact = pointCount > 10
+  const isDense = pointCount > 16
+  const fSize = isDense ? 8 : isCompact ? 8.5 : 9.5
+  const spaceAfter = isDense ? 1 : isCompact ? 2 : 4
+  const spaceBr = isDense ? 2 : isCompact ? 3 : 6
+  const sectionFSize = isDense ? 9 : isCompact ? 9.5 : 10.5
+
   slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })
 
-  // Icône favicon à gauche du titre
   const iconPath = path.join(process.cwd(), 'template_assets', 'favicon_icon.png')
   if (fs.existsSync(iconPath)) {
     slide.addImage({ path: iconPath, x: 0.5, y: 0.6, w: 0.25, h: 0.25 })
   }
 
-  slide.addText(exp.entreprise + ' – ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
+  const titleSuffix = isContinued ? ' (suite)' : ''
+  slide.addText(exp.entreprise + ' | ' + exp.role + (exp.stack ? ' ' + exp.stack : '') + titleSuffix, {
     x: 0.85, y: 0.52, w: W - 1.0, h: 0.5,
     fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
   })
@@ -147,19 +186,22 @@ function addExperienceSlide(pres, exp) {
     fontSize: 10, color: BLUE, fontFace: 'Montserrat', italic: true
   })
 
-  // ── Tout le contenu en UNE SEULE zone de texte fluide ──
-  // Comme ça l'utilisateur peut tout modifier/déplacer d'un bloc
   const runs = []
-
-  const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 4, fontFace: 'Montserrat', color: BLACK, paraSpaceAfter: 6 } })
+  const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 4, fontFace: 'Montserrat', color: BLACK, paraSpaceAfter: spaceBr } })
   const line = (text, opts = {}) => {
-    runs.push({ text, options: { fontSize: 9.5, fontFace: 'Montserrat', color: BLACK, breakLine: true, ...opts } })
+    runs.push({ text, options: { fontSize: fSize, fontFace: 'Montserrat', color: BLACK, breakLine: true, ...opts } })
   }
   const sectionTitle = (text) => {
-    runs.push({ text, options: { fontSize: 10.5, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: 8, paraSpaceAfter: 4 } })
+    runs.push({ text, options: { fontSize: sectionFSize, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: isCompact ? 4 : 8, paraSpaceAfter: spaceAfter } })
+  }
+  const subRoleTitle = (text) => {
+    runs.push({ text, options: { fontSize: 10, fontFace: 'Montserrat', color: BLUE, bold: true, breakLine: true, paraSpaceBefore: 10, paraSpaceAfter: 4 } })
+  }
+  const subRoleDates = (text) => {
+    runs.push({ text, options: { fontSize: 9, fontFace: 'Montserrat', color: BLACK, italic: true, breakLine: true, paraSpaceAfter: 4 } })
   }
   const bulletRich = (text, isLast) => {
-    const parts = parseRichText(text, { fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' })
+    const parts = parseRichText(text, { fontSize: fSize, color: BLACK, fontFace: 'Montserrat' })
     parts.forEach((p, i) => {
       const isFirstOfPart = i === 0
       const isLastOfPart = i === parts.length - 1
@@ -169,46 +211,53 @@ function addExperienceSlide(pres, exp) {
           ...p.options,
           bullet: isFirstOfPart ? true : false,
           breakLine: isLastOfPart ? true : false,
-          paraSpaceAfter: isLastOfPart ? 4 : 0,
+          paraSpaceAfter: isLastOfPart ? spaceAfter : 0,
         }
       })
     })
   }
 
-  // Projet
   if (exp.projet) {
     line(exp.projet, { italic: true, paraSpaceAfter: 4 })
     br()
   }
 
-  // Activités
-  exp.activites?.forEach(act => {
-    sectionTitle(act.theme)
-    act.points?.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+  if (exp.sub_roles && exp.sub_roles.length > 0) {
+    exp.sub_roles.forEach((sub, subIdx) => {
+      subRoleTitle('↳ ' + sub.titre)
+      if (sub.dates) subRoleDates(sub.dates)
+      sub.activites?.forEach(act => {
+        sectionTitle(act.theme)
+        act.points?.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+      })
+      if (subIdx < exp.sub_roles.length - 1) br()
+    })
     br()
-  })
+  } else {
+    exp.activites?.forEach(act => {
+      sectionTitle(act.theme)
+      act.points?.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
+      br()
+    })
+  }
 
-  // Enjeux
   if (exp.enjeux?.length) {
     sectionTitle('Enjeux :')
     exp.enjeux.forEach((e, i) => bulletRich(e, i === exp.enjeux.length - 1))
     br()
   }
 
-  // Résultats
   if (exp.resultats?.length) {
     sectionTitle('Résultats :')
     exp.resultats.forEach((r, i) => bulletRich(r, i === exp.resultats.length - 1))
     br()
   }
 
-  // Env technique
   if (exp.env_technique?.length) {
     runs.push({ text: 'Environnement technique : ', options: { bold: true, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' } })
     runs.push({ text: exp.env_technique.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: true } })
   }
 
-  // Une seule addText pour tout le contenu
   slide.addText(runs, {
     x: 0.3, y: 1.7,
     w: W - 0.5, h: H - 1.85,
