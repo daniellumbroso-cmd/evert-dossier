@@ -205,11 +205,13 @@ export default function AppPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dossier })
       })
-      if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || 'Erreur Drive')
-      }
       const data = await response.json()
+      if (response.status === 401 && data.error === 'SESSION_EXPIRED') {
+        toast.error('Session Google expirée — reconnexion nécessaire')
+        setTimeout(() => { window.location.href = '/api/auth/login' }, 1500)
+        return
+      }
+      if (!response.ok) throw new Error(data.error || 'Erreur Drive')
       setSavedUrl(data.docUrl)
       toast.success('Sauvegardé dans Google Drive !')
     } catch (err) {

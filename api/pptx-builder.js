@@ -140,16 +140,28 @@ function addExperienceSlide(pres, exp) {
   const pointCount = countExpPoints(exp)
   const needsSplit = pointCount > 18
 
-  if (needsSplit && exp.activites && exp.activites.length > 2) {
+  if (needsSplit && exp.sub_roles && exp.sub_roles.length > 1) {
+    // Split sur les sub_roles : 1er sub_role(s) sur slide 1, reste sur slide 2
+    const mid = Math.ceil(exp.sub_roles.length / 2)
+    const exp1 = { ...exp, sub_roles: exp.sub_roles.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, sub_roles: exp.sub_roles.slice(mid), projet: null }
+    _renderExpSlide(pres, exp1, true)
+    _renderExpSlide(pres, exp2, false)
+  } else if (needsSplit && exp.activites && exp.activites.length >= 2) {
+    // Split sur les activites : couper en 2 groupes de thèmes
     const mid = Math.ceil(exp.activites.length / 2)
     const exp1 = { ...exp, activites: exp.activites.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
     const exp2 = { ...exp, activites: exp.activites.slice(mid), projet: null }
     _renderExpSlide(pres, exp1, true)
     _renderExpSlide(pres, exp2, false)
-  } else if (needsSplit && exp.sub_roles && exp.sub_roles.length > 1) {
-    const mid = Math.ceil(exp.sub_roles.length / 2)
-    const exp1 = { ...exp, sub_roles: exp.sub_roles.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
-    const exp2 = { ...exp, sub_roles: exp.sub_roles.slice(mid), projet: null }
+  } else if (needsSplit && exp.sub_roles && exp.sub_roles.length === 1) {
+    // 1 seul sub_role très long : split ses activites
+    const sub = exp.sub_roles[0]
+    const mid = Math.ceil((sub.activites?.length || 0) / 2)
+    const sub1 = { ...sub, activites: sub.activites?.slice(0, mid) }
+    const sub2 = { ...sub, activites: sub.activites?.slice(mid) }
+    const exp1 = { ...exp, sub_roles: [sub1], enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, sub_roles: [sub2], projet: null }
     _renderExpSlide(pres, exp1, true)
     _renderExpSlide(pres, exp2, false)
   } else {

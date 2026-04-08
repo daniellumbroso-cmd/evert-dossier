@@ -134,15 +134,31 @@ function countExpPoints(exp) {
 }
 
 function addExperienceSlide(pres, exp) {
-  // Seuil de split : si trop de points, on divise en 2 slides
   const pointCount = countExpPoints(exp)
   const needsSplit = pointCount > 18
 
-  if (needsSplit && exp.activites && exp.activites.length > 2) {
-    // Split : première moitié sur slide 1, deuxième moitié sur slide 2
+  if (needsSplit && exp.sub_roles && exp.sub_roles.length > 1) {
+    // Split sur sub_roles : 1er sur slide 1, reste sur slide 2
+    const mid = Math.ceil(exp.sub_roles.length / 2)
+    const exp1 = { ...exp, sub_roles: exp.sub_roles.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, sub_roles: exp.sub_roles.slice(mid), projet: null }
+    _renderExperienceSlide(pres, exp1, true)
+    _renderExperienceSlide(pres, exp2, false)
+  } else if (needsSplit && exp.activites && exp.activites.length >= 2) {
+    // Split sur activites
     const mid = Math.ceil(exp.activites.length / 2)
     const exp1 = { ...exp, activites: exp.activites.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
     const exp2 = { ...exp, activites: exp.activites.slice(mid), projet: null }
+    _renderExperienceSlide(pres, exp1, true)
+    _renderExperienceSlide(pres, exp2, false)
+  } else if (needsSplit && exp.sub_roles && exp.sub_roles.length === 1) {
+    // 1 seul sub_role très long : split ses activites
+    const sub = exp.sub_roles[0]
+    const mid = Math.ceil((sub.activites?.length || 0) / 2)
+    const sub1 = { ...sub, activites: sub.activites?.slice(0, mid) }
+    const sub2 = { ...sub, activites: sub.activites?.slice(mid) }
+    const exp1 = { ...exp, sub_roles: [sub1], enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, sub_roles: [sub2], projet: null }
     _renderExperienceSlide(pres, exp1, true)
     _renderExperienceSlide(pres, exp2, false)
   } else {
