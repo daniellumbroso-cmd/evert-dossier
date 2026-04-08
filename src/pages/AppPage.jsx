@@ -38,6 +38,10 @@ export default function AppPage() {
   const [prospectInfoUpload, setProspectInfoUpload] = useState('')
   const [prospectPdfUpload, setProspectPdfUpload] = useState(null)
   const [pushReady, setPushReady] = useState(false)
+  const [showBoondPanel, setShowBoondPanel] = useState(false)
+  const [boondCandidateId, setBoondCandidateId] = useState('')
+  const [boondOpportunityId, setBoondOpportunityId] = useState('')
+  const [loadingBoond, setLoadingBoond] = useState(false)
 
   const onDrop = useCallback(acceptedFiles => {
     const file = acceptedFiles[0]
@@ -230,6 +234,36 @@ export default function AppPage() {
     await navigator.clipboard.writeText(copyText)
     if (type === 'objet') { setCopiedObjet(true); setTimeout(() => setCopiedObjet(false), 2000) }
     if (type === 'corps') { setCopiedCorps(true); setTimeout(() => setCopiedCorps(false), 2000) }
+  }
+
+  const generateFromBoond = async () => {
+    if (!boondCandidateId.trim()) return toast.error('Renseignez l\'ID candidat Boond')
+    setLoadingBoond(true)
+    setDossier(null)
+    setPushResult(null)
+    setPushReady(false)
+    try {
+      const response = await fetch('/api/boond-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateId: boondCandidateId.trim(),
+          opportunityId: boondOpportunityId.trim() || undefined,
+          community
+        })
+      })
+      const text = await response.text()
+      let data
+      try { data = JSON.parse(text) } catch { throw new Error('Réponse invalide') }
+      if (!response.ok) throw new Error(data.error || 'Erreur serveur')
+      setDossier(data.dossier)
+      toast.success('Dossier généré depuis Boond !')
+      setShowBoondPanel(false)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLoadingBoond(false)
+    }
   }
 
   const reset = () => {
@@ -507,6 +541,50 @@ export default function AppPage() {
                     </label>
                   )}
                 </div>
+              </div>
+
+              {/* Bouton Boond */}
+              <div style={{ background: '#f0f0ff', border: '1.5px solid #1400FF', borderRadius: 12, padding: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1400FF', fontFamily: 'Montserrat, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    🔗 Générer depuis Boond
+                  </span>
+                  <button onClick={() => setShowBoondPanel(!showBoondPanel)} style={{ fontSize: 11, color: '#1400FF', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Montserrat', fontWeight: 600 }}>
+                    {showBoondPanel ? '▲ Masquer' : '▼ Afficher'}
+                  </button>
+                </div>
+                {showBoondPanel && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input
+                      value={boondCandidateId}
+                      onChange={e => setBoondCandidateId(e.target.value)}
+                      placeholder="ID candidat Boond (ex: 23358)"
+                      style={{ padding: '8px 12px', border: '1.5px solid #e0e0e0', borderRadius: 8, fontFamily: 'Montserrat', fontSize: 12, outline: 'none' }}
+                      onFocus={e => e.target.style.borderColor = '#1400FF'}
+                      onBlur={e => e.target.style.borderColor = '#e0e0e0'}
+                    />
+                    <input
+                      value={boondOpportunityId}
+                      onChange={e => setBoondOpportunityId(e.target.value)}
+                      placeholder="ID besoin Boond (optionnel, ex: 1269)"
+                      style={{ padding: '8px 12px', border: '1.5px solid #e0e0e0', borderRadius: 8, fontFamily: 'Montserrat', fontSize: 12, outline: 'none' }}
+                      onFocus={e => e.target.style.borderColor = '#1400FF'}
+                      onBlur={e => e.target.style.borderColor = '#e0e0e0'}
+                    />
+                    <button
+                      onClick={generateFromBoond}
+                      disabled={loadingBoond}
+                      style={{
+                        padding: '10px 16px', background: loadingBoond ? '#c8c8e8' : '#1400FF',
+                        color: '#fff', border: 'none', borderRadius: 8,
+                        cursor: loadingBoond ? 'not-allowed' : 'pointer',
+                        fontFamily: 'Montserrat', fontSize: 12, fontWeight: 700
+                      }}
+                    >
+                      {loadingBoond ? '⏳ Génération...' : '🔗 Générer depuis Boond'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Generate button */}
