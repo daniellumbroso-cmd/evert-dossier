@@ -42,6 +42,7 @@ export default function AppPage() {
   const [boondOpportunityId, setBoondOpportunityId] = useState('')
   const [loadingBoond, setLoadingBoond] = useState(false)
   const [boondBesoinPreview, setBoondBesoinPreview] = useState(null)
+  const [ajustements, setAjustements] = useState([])
 
   const onDrop = useCallback(acceptedFiles => {
     const file = acceptedFiles[0]
@@ -103,6 +104,7 @@ export default function AppPage() {
 
       const data = await response.json()
       setDossier(data.dossier)
+      setAjustements(data.dossier.ajustements || [])
       setCurrentStep(STEPS.length)
       toast.success('Dossier généré !')
 
@@ -279,6 +281,7 @@ export default function AppPage() {
     setBoondBesoinPreview(null)
     setBoondOpportunityId('')
     setBesoinMode('text')
+    setAjustements([])
   }
 
   const BLUE = '#1400FF'
@@ -665,6 +668,14 @@ export default function AppPage() {
                   {dossier.titre}
                 </p>
               </div>
+              {ajustements.length > 0 && (
+                <div style={{ background: '#f0f4ff', border: '1px solid #c0ccff', borderRadius: 10, padding: '10px 14px', margin: '8px 0 0', maxWidth: 600 }}>
+                  <p style={{ margin: '0 0 6px', fontFamily: 'Montserrat', fontSize: 11, fontWeight: 700, color: '#1400FF', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Adaptations au besoin client</p>
+                  {ajustements.map((a, i) => (
+                    <p key={i} style={{ margin: '0 0 3px', fontFamily: 'Montserrat', fontSize: 12, color: '#333' }}>• {a}</p>
+                  ))}
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <button

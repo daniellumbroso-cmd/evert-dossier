@@ -134,10 +134,26 @@ function countExpPoints(exp) {
 }
 
 function addExperienceSlide(pres, exp) {
+  // Seuil de split : si trop de points, on divise en 2 slides
+  const pointCount = countExpPoints(exp)
+  const needsSplit = pointCount > 22
+
+  if (needsSplit && exp.activites && exp.activites.length > 2) {
+    // Split : première moitié sur slide 1, deuxième moitié sur slide 2
+    const mid = Math.ceil(exp.activites.length / 2)
+    const exp1 = { ...exp, activites: exp.activites.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, activites: exp.activites.slice(mid), projet: null }
+    _renderExperienceSlide(pres, exp1, true)
+    _renderExperienceSlide(pres, exp2, false)
+  } else {
+    _renderExperienceSlide(pres, exp, false)
+  }
+}
+
+function _renderExperienceSlide(pres, exp, isContinued) {
   const slide = pres.addSlide()
   slide.background = { color: LIGHT }
 
-  // Ajustement dynamique selon la densité du contenu
   const pointCount = countExpPoints(exp)
   const isCompact = pointCount > 12
   const isDense = pointCount > 18
@@ -146,16 +162,15 @@ function addExperienceSlide(pres, exp) {
   const spaceBr = isDense ? 2 : isCompact ? 3 : 6
   const sectionFSize = isDense ? 9 : isCompact ? 9.5 : 10.5
 
-  // Ligne bleue décorative en haut
   slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })
 
-  // Icône favicon à gauche du titre
   const iconPath = path.join(process.cwd(), 'template_assets', 'favicon_icon.png')
   if (fs.existsSync(iconPath)) {
     slide.addImage({ path: iconPath, x: 0.5, y: 0.6, w: 0.25, h: 0.25 })
   }
 
-  slide.addText(exp.entreprise + ' | ' + exp.role + (exp.stack ? ' ' + exp.stack : ''), {
+  const titleSuffix = isContinued ? ' (suite)' : ''
+  slide.addText(exp.entreprise + ' | ' + exp.role + (exp.stack ? ' ' + exp.stack : '') + titleSuffix, {
     x: 0.85, y: 0.52, w: W - 1.0, h: 0.5,
     fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
   })
@@ -196,16 +211,13 @@ function addExperienceSlide(pres, exp) {
     })
   }
 
-  // Projet (contexte global si présent)
   if (exp.projet) {
     line(exp.projet, { italic: true, paraSpaceAfter: 4 })
     br()
   }
 
-  // CAS 1 : Expérience fusionnée avec sub_roles
   if (exp.sub_roles && exp.sub_roles.length > 0) {
     exp.sub_roles.forEach((sub, subIdx) => {
-      // Titre du sous-rôle avec un tiret court pour hiérarchie visuelle
       subRoleTitle('↳ ' + sub.titre)
       if (sub.dates) subRoleDates(sub.dates)
       sub.activites?.forEach(act => {
@@ -216,7 +228,6 @@ function addExperienceSlide(pres, exp) {
     })
     br()
   } else {
-    // CAS 2 : Expérience classique (comportement original)
     exp.activites?.forEach(act => {
       sectionTitle(act.theme)
       act.points?.forEach((pt, i) => bulletRich(pt, i === act.points.length - 1))
@@ -224,21 +235,18 @@ function addExperienceSlide(pres, exp) {
     })
   }
 
-  // Enjeux (toujours globaux)
   if (exp.enjeux?.length) {
     sectionTitle('Enjeux :')
     exp.enjeux.forEach((e, i) => bulletRich(e, i === exp.enjeux.length - 1))
     br()
   }
 
-  // Résultats (toujours globaux)
   if (exp.resultats?.length) {
     sectionTitle('Résultats :')
     exp.resultats.forEach((r, i) => bulletRich(r, i === exp.resultats.length - 1))
     br()
   }
 
-  // Env technique (toujours global)
   if (exp.env_technique?.length) {
     runs.push({ text: 'Environnement technique : ', options: { bold: true, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat' } })
     runs.push({ text: exp.env_technique.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: true } })

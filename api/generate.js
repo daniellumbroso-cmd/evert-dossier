@@ -59,6 +59,11 @@ ORDRE DES COMPÉTENCES TECHNIQUES :
 - Si un besoin client est fourni, mettre en PREMIER dans chaque catégorie les items qui correspondent au besoin
 - Les compétences non pertinentes pour le besoin client passent en dernier
 
+ADAPTATION AU BESOIN CLIENT (si besoin fourni) :
+- TITRE : adapter le titre du candidat pour qu'il corresponde exactement au besoin client (ex: si besoin "PO secteur public / Alexi / DIHAL", titre = "Product Owner / Secteur Public / Jira / Confluence / SQL" plutôt que générique)
+- WORDING : dans le résumé et les expériences, adapter les formulations pour mettre en avant ce qui correspond au besoin (sans invention) — ex: si besoin "PM en binôme", mettre en avant la capacité à travailler en collaboration
+- AJUSTEMENTS : lister de manière concise (3-6 points max) les adaptations faites pour coller au besoin
+
 RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
 {
   "nom": "PRÉNOM NOM",
@@ -116,7 +121,8 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
   ],
   "langues": [
     {"langue": "", "niveau": ""}
-  ]
+  ],
+  "ajustements": ["Adaptation 1 : ...", "Adaptation 2 : ..."]
 }`
 
 
