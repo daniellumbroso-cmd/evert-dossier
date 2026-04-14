@@ -318,14 +318,29 @@ export default async function handler(req, res) {
     try {
       const response = await anthropic.messages.create({
         model: 'claude-opus-4-5',
-        max_tokens: 4096,
+        max_tokens: 8000,
         system: SYSTEM_PROMPT,
         messages
       })
 
       const raw = response.content.map(b => b.text || '').join('')
       const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      const dossier = JSON.parse(cleaned)
+
+      // Vérifier si la réponse est tronquée (stop_reason = max_tokens)
+      const stopReason = response.stop_reason
+      if (stopReason === 'max_tokens') {
+        console.error('Response truncated at max_tokens, length:', cleaned.length)
+        return res.status(500).json({ error: 'Le dossier est trop long pour être généré en une fois. Essayez avec un CV plus court ou sans besoin client détaillé.' })
+      }
+
+      let dossier
+      try {
+        dossier = JSON.parse(cleaned)
+      } catch (parseErr) {
+        // Tentative de réparation : trouver le dernier } valide
+        console.error('JSON parse error, attempting repair. Length:', cleaned.length)
+        return res.status(500).json({ error: 'Erreur de génération : réponse tronquée. Réessayez.' })
+      }
 
       res.json({ success: true, dossier })
     } catch (apiErr) {
