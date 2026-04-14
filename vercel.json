@@ -2,12 +2,24 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/*.js": {
-      "maxDuration": 300
+    "api/generate.js": {
+      "maxDuration": 60
+    },
+    "api/save-to-drive.js": {
+      "maxDuration": 60
+    },
+    "api/export-pptx.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
