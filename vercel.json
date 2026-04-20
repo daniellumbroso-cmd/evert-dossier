@@ -3,7 +3,8 @@
   "outputDirectory": "dist",
   "functions": {
     "api/generate.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 1024
     },
     "api/save-to-drive.js": {
       "maxDuration": 60

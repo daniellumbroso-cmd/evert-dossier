@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import formidable from 'formidable'
 import fs from 'fs'
+import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -290,21 +291,31 @@ export default async function handler(req, res) {
 
     if (pdfFile) {
       const pdfBuffer = fs.readFileSync(pdfFile.filepath)
-      const base64 = pdfBuffer.toString('base64')
 
-      messages = [{
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: base64 }
-          },
-          {
-            type: 'text',
-            text: `Génère le dossier de compétences Ever"T à partir de ce CV PDF.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}`
-          }
-        ]
-      }]
+      // Extraire le texte du PDF localement (plus rapide et moins de tokens que base64)
+      let cvText = ''
+      try {
+        const parsed = await pdfParse(pdfBuffer)
+        cvText = parsed.text
+      } catch (pdfErr) {
+        console.error('PDF parse error:', pdfErr.message)
+        // Fallback : envoyer en base64 si extraction échoue
+        const base64 = pdfBuffer.toString('base64')
+        messages = [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+            { type: 'text', text: `Génère le dossier de compétences Ever"T à partir de ce CV PDF.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}` }
+          ]
+        }]
+      }
+
+      if (cvText) {
+        messages = [{
+          role: 'user',
+          content: `Génère le dossier de compétences Ever"T à partir de ce CV.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}\n\nCV :\n${cvText}`
+        }]
+      }
     } else if (cvText) {
       messages = [{
         role: 'user',
