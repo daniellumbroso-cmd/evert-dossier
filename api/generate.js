@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import formidable from 'formidable'
 import fs from 'fs'
-import { PDFParse } from 'pdf-parse'
+import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -295,8 +295,7 @@ export default async function handler(req, res) {
       // Extraire le texte du PDF localement (plus rapide et moins de tokens que base64)
       let extractedText = ''
       try {
-        const parser = new PDFParse({ data: pdfBuffer })
-        const parsed = await parser.getText()
+        const parsed = await pdfParse(pdfBuffer)
         extractedText = parsed.text || ''
       } catch (pdfErr) {
         console.error('PDF parse error:', pdfErr.message)
