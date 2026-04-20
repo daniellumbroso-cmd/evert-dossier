@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import formidable from 'formidable'
 import fs from 'fs'
-import pdfParse from 'pdf-parse/lib/pdf-parse.js'
+import { PDFParse } from 'pdf-parse'
 
 export const config = { api: { bodyParser: false } }
 
@@ -293,10 +293,11 @@ export default async function handler(req, res) {
       const pdfBuffer = fs.readFileSync(pdfFile.filepath)
 
       // Extraire le texte du PDF localement (plus rapide et moins de tokens que base64)
-      let cvText = ''
+      let extractedText = ''
       try {
-        const parsed = await pdfParse(pdfBuffer)
-        cvText = parsed.text
+        const parser = new PDFParse({ data: pdfBuffer })
+        const parsed = await parser.getText()
+        extractedText = parsed.text || ''
       } catch (pdfErr) {
         console.error('PDF parse error:', pdfErr.message)
         // Fallback : envoyer en base64 si extraction échoue
@@ -310,10 +311,10 @@ export default async function handler(req, res) {
         }]
       }
 
-      if (cvText) {
+      if (extractedText) {
         messages = [{
           role: 'user',
-          content: `Génère le dossier de compétences Ever"T à partir de ce CV.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}\n\nCV :\n${cvText}`
+          content: `Génère le dossier de compétences Ever"T à partir de ce CV.\nCommunauté cible : ${community}${instructions ? '\nInstructions complémentaires : ' + instructions : ''}${besoinSection}\n\nCV :\n${extractedText}`
         }]
       }
     } else if (cvText) {
