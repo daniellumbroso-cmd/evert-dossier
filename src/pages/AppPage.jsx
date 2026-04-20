@@ -121,11 +121,27 @@ export default function AppPage() {
       await stepsPromise
 
       if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || 'Erreur serveur')
+        let errMsg = 'Erreur serveur'
+        try {
+          const err = await response.json()
+          errMsg = err.error || errMsg
+        } catch {
+          // La réponse n'est pas du JSON (ex: timeout Vercel HTML)
+          if (response.status === 504 || response.status === 502) {
+            errMsg = 'Délai dépassé — le CV est peut-être trop lourd. Essayez en collant le texte du CV.'
+          } else {
+            errMsg = `Erreur serveur (${response.status})`
+          }
+        }
+        throw new Error(errMsg)
       }
 
-      const data = await response.json()
+      let data
+      try {
+        data = await response.json()
+      } catch {
+        throw new Error('Réponse invalide du serveur. Réessayez.')
+      }
       setDossier(data.dossier)
       setAjustements(data.dossier.ajustements || [])
       setCurrentStep(STEPS.length)

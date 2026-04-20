@@ -344,8 +344,15 @@ export default async function handler(req, res) {
 
       res.json({ success: true, dossier })
     } catch (apiErr) {
-      console.error('Claude error:', apiErr)
-      res.status(500).json({ error: 'Erreur génération Claude : ' + apiErr.message })
+      console.error('Claude error:', apiErr.message || apiErr)
+      const msg = apiErr.message || ''
+      if (msg.includes('overloaded') || msg.includes('529')) {
+        return res.status(503).json({ error: 'Claude est surchargé, réessayez dans quelques secondes.' })
+      }
+      if (msg.includes('too large') || msg.includes('file size') || msg.includes('413')) {
+        return res.status(413).json({ error: 'Le PDF est trop lourd. Copiez-collez le texte du CV à la place.' })
+      }
+      res.status(500).json({ error: 'Erreur génération Claude : ' + msg })
     } finally {
       if (pdfFile) {
         try { fs.unlinkSync(pdfFile.filepath) } catch {}
