@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import './index.css'
 import LoginPage from './pages/LoginPage'
 import AppPage from './pages/AppPage'
+import SearchPage from './pages/SearchPage'
 import ProtectedRoute from './components/ProtectedRoute'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -33,6 +34,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/app" element={
           <ProtectedRoute>
             <AppPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/search" element={
+          <ProtectedRoute>
+            <SearchPage />
           </ProtectedRoute>
         } />
       </Routes>

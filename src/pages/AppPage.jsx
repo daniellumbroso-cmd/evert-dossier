@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import DossierPreview from '../components/DossierPreview'
-import { Upload, FileText, Sparkles, LogOut, ChevronDown } from 'lucide-react'
+import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search } from 'lucide-react'
 
 const COMMUNITIES = ['DATA', 'Product', 'Mobile / Dev', 'Web', 'DevOps / Cloud', 'IA / ML']
 
@@ -375,6 +376,20 @@ export default function AppPage() {
 
           {user && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <Link to="/search" style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
+                color: '#1400FF', textDecoration: 'none',
+                padding: '7px 14px', borderRadius: 8,
+                border: '1.5px solid #1400FF',
+                background: 'rgba(20,0,255,0.04)',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#1400FF'; e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(20,0,255,0.04)'; e.currentTarget.style.color = '#1400FF' }}
+              >
+                <Search size={13} /> Recherche Profils
+              </Link>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {user.picture && (
                   <img src={user.picture} alt="" style={{ width: 30, height: 30, borderRadius: '50%', border: '2px solid #e8e8f0' }} />
