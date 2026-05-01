@@ -6,6 +6,7 @@ import './index.css'
 import LoginPage from './pages/LoginPage'
 import AppPage from './pages/AppPage'
 import SearchPage from './pages/SearchPage'
+import DebugBoondPage from './pages/DebugBoondPage'
 import ProtectedRoute from './components/ProtectedRoute'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -39,6 +40,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/search" element={
           <ProtectedRoute>
             <SearchPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/debug-boond" element={
+          <ProtectedRoute>
+            <DebugBoondPage />
           </ProtectedRoute>
         } />
       </Routes>
