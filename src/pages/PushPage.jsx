@@ -5,14 +5,15 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import {
   ArrowLeft, LogOut, Loader2, Upload, FileText, Send,
-  Briefcase, Building2, ExternalLink, Mail, Linkedin, Copy, X, Phone, User
+  ExternalLink, Mail, Linkedin, Copy, X, Phone, User, Search,
+  Briefcase, MessageSquare, ChevronDown, Zap
 } from 'lucide-react'
 
 // ─── Composants utilitaires ────────────────────────────────
 function ScoreBadge({ score }) {
   if (score == null) return null
-  const color = score >= 80 ? '#1400FF' : score >= 60 ? '#5b3df5' : '#888'
-  const bg = score >= 80 ? 'rgba(20,0,255,0.10)' : score >= 60 ? 'rgba(91,61,245,0.10)' : '#f0f0f5'
+  const color = score >= 80 ? '#1400FF' : score >= 60 ? '#5b3df5' : score >= 45 ? '#7c6ff0' : '#999'
+  const bg = score >= 80 ? 'rgba(20,0,255,0.10)' : score >= 60 ? 'rgba(91,61,245,0.10)' : score >= 45 ? 'rgba(124,111,240,0.08)' : '#f0f0f5'
   return (
     <div style={{
       minWidth: 44, height: 44, borderRadius: '50%',
@@ -24,24 +25,23 @@ function ScoreBadge({ score }) {
   )
 }
 
-function StatusPill({ label, color, bg }) {
+function SourcePill({ sourceType, kind }) {
+  const map = {
+    'opportunity': { icon: <Briefcase size={10} />, color: '#b57a00', bg: 'rgba(255,170,0,0.12)' },
+    'contact': { icon: <User size={10} />, color: '#5b3df5', bg: 'rgba(91,61,245,0.10)' },
+    'action_note': { icon: <MessageSquare size={10} />, color: '#1d8b4f', bg: 'rgba(40,180,99,0.10)' }
+  }
+  const conf = map[kind] || { icon: null, color: '#555', bg: '#f0f0f5' }
   return (
     <span style={{
-      display: 'inline-block', fontSize: 10, fontFamily: 'Montserrat, sans-serif',
-      fontWeight: 600, padding: '3px 8px', borderRadius: 10,
-      color, background: bg, textTransform: 'uppercase', letterSpacing: '0.03em'
-    }}>{label}</span>
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 10, fontFamily: 'Montserrat, sans-serif', fontWeight: 600,
+      padding: '3px 8px', borderRadius: 10,
+      color: conf.color, background: conf.bg, textTransform: 'uppercase', letterSpacing: '0.03em'
+    }}>{conf.icon} {sourceType}</span>
   )
 }
-function stateLabel(state) {
-  const map = {
-    '1': { label: 'En cours', color: '#b57a00', bg: 'rgba(255,170,0,0.12)' },
-    '2': { label: 'Gagné', color: '#1d8b4f', bg: 'rgba(40,180,99,0.12)' },
-    '3': { label: 'Perdu', color: '#b71c1c', bg: 'rgba(220,50,50,0.10)' },
-    '0': { label: 'Abandonné', color: '#666', bg: '#f0f0f5' }
-  }
-  return map[String(state)] || { label: `Statut ${state}`, color: '#555', bg: '#f0f0f5' }
-}
+
 const linkStyle = {
   display: 'flex', alignItems: 'center', gap: 6,
   fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 500,
@@ -64,40 +64,42 @@ const btnPrimary = {
 }
 
 // ─── Modal message push ────────────────────────────────
-function PushModal({ open, onClose, profile, target, kind, opportunity }) {
+function PushModal({ open, onClose, profile, lead }) {
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState(null)
 
   React.useEffect(() => {
-    if (!open) return
-    setLoading(true)
-    setMsg(null)
+    if (!open || !lead) return
+    setLoading(true); setMsg(null)
+    const target = {
+      id: lead.id,
+      name: lead.company,
+      company: lead.company,
+      activityArea: '',
+      reason: lead.reason,
+      contact: lead.contact
+    }
+    const opportunity = lead.kind === 'opportunity'
+      ? { title: lead.title, reference: lead.reference, stateLabel: lead.stateLabel, state: lead.state }
+      : null
     fetch('/api/push-message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile, target, kind, opportunity })
+      body: JSON.stringify({ profile, target, kind: lead.kind, opportunity })
     })
       .then(r => r.json())
-      .then(j => {
-        if (j.error) toast.error(j.error)
-        else setMsg(j)
-      })
+      .then(j => { if (j.error) toast.error(j.error); else setMsg(j) })
       .catch(e => toast.error(e.message))
       .finally(() => setLoading(false))
-  }, [open, target?.id])
+  }, [open, lead?.id])
 
   if (!open) return null
-
-  const copy = (txt) => {
-    navigator.clipboard.writeText(txt)
-    toast.success('Copié')
-  }
+  const copy = (txt) => { navigator.clipboard.writeText(txt); toast.success('Copié') }
 
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-      padding: 20
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#fff', borderRadius: 16, padding: 24,
@@ -109,38 +111,31 @@ function PushModal({ open, onClose, profile, target, kind, opportunity }) {
           marginBottom: 16
         }}>
           <div>
-            <div style={{
-              fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#111'
-            }}>
-              Push vers {target?.name || target?.company || '?'}
+            <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#111' }}>
+              Push vers {lead?.company || '?'}
             </div>
-            {target?.contact && (
+            {lead?.contact && (
               <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                À : {target.contact.firstName} {target.contact.lastName}
-                {target.contact.function && ` — ${target.contact.function}`}
+                À : {lead.contact.firstName} {lead.contact.lastName}
+                {lead.contact.function && ` — ${lead.contact.function}`}
               </div>
             )}
           </div>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 4
-          }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 4 }}>
             <X size={20} />
           </button>
         </div>
 
         {loading && (
           <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>
-            <Loader2 size={20} className="mtch-spin" style={{ color: '#1400FF', marginBottom: 8 }} />
+            <Loader2 size={20} className="pp-spin" style={{ color: '#1400FF', marginBottom: 8 }} />
             <div>Rédaction en cours…</div>
           </div>
         )}
 
         {msg && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* EMAIL */}
-            <div style={{
-              border: '1.5px solid #e8e8f0', borderRadius: 12, padding: 14
-            }}>
+            <div style={{ border: '1.5px solid #e8e8f0', borderRadius: 12, padding: 14 }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
                 fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
@@ -151,15 +146,11 @@ function PushModal({ open, onClose, profile, target, kind, opportunity }) {
               <div style={{
                 fontSize: 12, color: '#666', marginBottom: 4,
                 fontFamily: 'Montserrat, sans-serif', fontWeight: 600
-              }}>
-                Objet
-              </div>
+              }}>Objet</div>
               <div style={{
                 background: '#fafafa', padding: '8px 10px', borderRadius: 6,
                 fontSize: 13, color: '#111', marginBottom: 10
-              }}>
-                {msg.email?.subject}
-              </div>
+              }}>{msg.email?.subject}</div>
               <textarea
                 value={msg.email?.body || ''}
                 onChange={e => setMsg({ ...msg, email: { ...msg.email, body: e.target.value } })}
@@ -174,21 +165,16 @@ function PushModal({ open, onClose, profile, target, kind, opportunity }) {
                 <button onClick={() => copy(`Objet: ${msg.email?.subject}\n\n${msg.email?.body}`)} style={miniLink}>
                   <Copy size={12} /> Copier
                 </button>
-                {target?.contact?.email && (
+                {lead?.contact?.email && (
                   <a
-                    href={`mailto:${target.contact.email}?subject=${encodeURIComponent(msg.email?.subject || '')}&body=${encodeURIComponent(msg.email?.body || '')}`}
+                    href={`mailto:${lead.contact.email}?subject=${encodeURIComponent(msg.email?.subject || '')}&body=${encodeURIComponent(msg.email?.body || '')}`}
                     style={btnPrimary}
-                  >
-                    <Send size={11} /> Ouvrir mail
-                  </a>
+                  ><Send size={11} /> Ouvrir mail</a>
                 )}
               </div>
             </div>
 
-            {/* LINKEDIN */}
-            <div style={{
-              border: '1.5px solid #e8e8f0', borderRadius: 12, padding: 14
-            }}>
+            <div style={{ border: '1.5px solid #e8e8f0', borderRadius: 12, padding: 14 }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
                 fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
@@ -220,66 +206,97 @@ function PushModal({ open, onClose, profile, target, kind, opportunity }) {
 }
 
 // ─── Carte piste ────────────────────────────────
-function LeadCard({ item, kind, onPush }) {
-  const st = kind === 'opportunity' ? stateLabel(item.state) : null
+function LeadRow({ lead, onPush }) {
   return (
     <div style={{
       background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
-      padding: 14, display: 'flex', alignItems: 'flex-start', gap: 14
+      padding: 16, display: 'flex', alignItems: 'flex-start', gap: 14
     }}>
-      <ScoreBadge score={item.score} />
+      <ScoreBadge score={lead.score} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-          <span style={{
-            fontFamily: 'Montserrat, sans-serif', fontWeight: 600, fontSize: 14, color: '#111'
-          }}>
-            {kind === 'opportunity'
-              ? (item.title || item.reference || `Opportunité #${item.id}`)
-              : (item.name || `Compte #${item.id}`)
-            }
-          </span>
-          {st && <StatusPill {...st} />}
+        {/* Ligne 1 : Société + statut */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+          {lead.company && (
+            <span style={{
+              fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: '#111'
+            }}>🏢 {lead.company}</span>
+          )}
+          <SourcePill sourceType={lead.sourceType} kind={lead.kind} />
         </div>
-        {kind === 'opportunity' && item.company && (
-          <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>🏢 {item.company}</div>
+
+        {/* Ligne 2 : Titre (besoin ou nom+fonction contact) */}
+        <div style={{
+          fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#333',
+          fontWeight: 500, marginBottom: 6
+        }}>
+          {lead.title}
+          {lead.reference && (
+            <span style={{ color: '#888', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+              · réf. {lead.reference}
+            </span>
+          )}
+          {lead.startDate && (
+            <span style={{ color: '#888', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+              · démarrage {lead.startDate}
+            </span>
+          )}
+        </div>
+
+        {/* Ligne 3 : Raison du match (Claude) */}
+        {lead.reason && (
+          <div style={{
+            fontSize: 12, color: '#555', marginBottom: 8, lineHeight: 1.5
+          }}>{lead.reason}</div>
         )}
-        {kind === 'company' && (item.activityArea || item.town) && (
-          <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>
-            {item.activityArea}{item.activityArea && item.town && ' · '}{item.town}
-          </div>
-        )}
-        {item.reason && (
-          <div style={{ fontSize: 12, color: '#888', fontStyle: 'italic', marginBottom: 6 }}>
-            {item.reason}
-          </div>
-        )}
-        {item.contact && (
+
+        {/* Ligne 4 : Contact opérationnel (si présent) */}
+        {lead.contact && (
           <div style={{
             background: 'rgba(20,0,255,0.04)', padding: '8px 10px', borderRadius: 8,
-            fontSize: 12, color: '#333', marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 12
+            fontSize: 12, color: '#333', marginBottom: 6,
+            display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center'
           }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <User size={11} /> <strong>{item.contact.firstName} {item.contact.lastName}</strong>
-              {item.contact.function && <span style={{ color: '#666' }}> — {item.contact.function}</span>}
+              <User size={11} />
+              <strong>{lead.contact.firstName} {lead.contact.lastName}</strong>
+              {lead.contact.function && <span style={{ color: '#666' }}> — {lead.contact.function}</span>}
             </span>
-            {item.contact.email && (
-              <a href={`mailto:${item.contact.email}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#1400FF', textDecoration: 'none' }}>
-                <Mail size={11} /> {item.contact.email}
+            {lead.contact.email && (
+              <a href={`mailto:${lead.contact.email}`} style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#1400FF', textDecoration: 'none' }}>
+                <Mail size={11} /> {lead.contact.email}
               </a>
             )}
-            {item.contact.phone && (
+            {lead.contact.phone && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#666' }}>
-                <Phone size={11} /> {item.contact.phone}
+                <Phone size={11} /> {lead.contact.phone}
+              </span>
+            )}
+            {lead.otherContactsCount > 0 && (
+              <span style={{ color: '#888', fontStyle: 'italic', fontSize: 11 }}>
+                (+{lead.otherContactsCount} autre{lead.otherContactsCount > 1 ? 's' : ''} contact{lead.otherContactsCount > 1 ? 's' : ''} dans le compte)
               </span>
             )}
           </div>
         )}
+
+        {/* Ligne 5 : Keywords matchés */}
+        {lead.matchedOn?.length > 0 && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, color: '#888' }}>
+            <Search size={10} style={{ marginTop: 2 }} />
+            Matché sur : {lead.matchedOn.map(m => (
+              <code key={m} style={{
+                background: '#f0f0f5', padding: '1px 6px', borderRadius: 4,
+                fontFamily: 'monospace', fontSize: 10
+              }}>{m}</code>
+            ))}
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-        <a href={item.boondUrl} target="_blank" rel="noopener noreferrer" style={miniLink}>
+        <a href={lead.boondUrl} target="_blank" rel="noopener noreferrer" style={miniLink}>
           <ExternalLink size={11} /> Boond
         </a>
-        <button onClick={() => onPush(item)} style={btnPrimary}>
+        <button onClick={() => onPush(lead)} style={btnPrimary}>
           <Send size={11} /> Push
         </button>
       </div>
@@ -292,53 +309,66 @@ export default function PushPage() {
   const { user, logout } = useAuth()
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [data, setData] = useState(null)
-  const [modal, setModal] = useState({ open: false, target: null, kind: null, opportunity: null })
+  const [deepLoading, setDeepLoading] = useState(false)
+  const [pageLoading, setPageLoading] = useState(false)
+  const [state, setState] = useState(null)  // { profile, leads[], cacheKey, page, hasMore, deepScanDone, counts, totalLeads }
+  const [modal, setModal] = useState({ open: false, lead: null })
 
   const onDrop = useCallback((accepted) => {
     if (!accepted?.length) return
     setFile(accepted[0])
-    setData(null)
+    setState(null)
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
-    maxSize: 15 * 1024 * 1024,
-    multiple: false
+    onDrop, accept: { 'application/pdf': ['.pdf'] },
+    maxSize: 15 * 1024 * 1024, multiple: false
   })
 
   const analyze = async () => {
     if (!file) return toast.error('Uploade un PDF d\'abord')
-    setLoading(true)
-    setData(null)
+    setLoading(true); setState(null)
     try {
       const fd = new FormData()
       fd.append('pdf', file)
       const r = await fetch('/api/boond-push-leads', { method: 'POST', body: fd })
       const j = await r.json()
-      if (!r.ok) {
-        toast.error(j.error || 'Erreur')
-        return
-      }
-      setData(j)
+      if (!r.ok) { toast.error(j.error || 'Erreur'); return }
+      setState(j)
       if (j.warning) toast(j.warning, { icon: '⚠️' })
-    } catch (e) {
-      toast.error(e.message)
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { toast.error(e.message) }
+    finally { setLoading(false) }
   }
 
-  const openPush = (item, kind) => {
-    setModal({
-      open: true,
-      target: kind === 'opportunity'
-        ? { ...item, name: item.company, contact: null }
-        : item,
-      kind,
-      opportunity: kind === 'opportunity' ? item : null
-    })
+  const loadMore = async () => {
+    if (!state?.cacheKey) return
+    setPageLoading(true)
+    try {
+      const r = await fetch('/api/boond-push-leads', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cacheKey: state.cacheKey, page: state.page + 1, action: 'next' })
+      })
+      const j = await r.json()
+      if (!r.ok) { toast.error(j.error || 'Erreur'); return }
+      setState({ ...state, page: j.page, leads: [...state.leads, ...j.leads], hasMore: j.hasMore, totalLeads: j.totalLeads })
+    } catch (e) { toast.error(e.message) }
+    finally { setPageLoading(false) }
+  }
+
+  const runDeepScan = async () => {
+    if (!state?.cacheKey) return
+    setDeepLoading(true)
+    try {
+      const r = await fetch('/api/boond-push-leads', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cacheKey: state.cacheKey, page: 1, action: 'deep_scan' })
+      })
+      const j = await r.json()
+      if (!r.ok) { toast.error(j.error || 'Erreur'); return }
+      setState({ ...state, ...j, leads: j.leads })
+      toast.success('Scan profond terminé — les nouvelles pistes sont intégrées')
+    } catch (e) { toast.error(e.message) }
+    finally { setDeepLoading(false) }
   }
 
   return (
@@ -392,11 +422,10 @@ export default function PushPage() {
             Push dossier → pistes clients
           </h1>
           <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
-            Uploade le dossier de compétences d'un consultant. On scanne Boond (opportunités + comptes) et on te propose où pusher.
+            Uploade le dossier PDF d'un consultant. On scanne les besoins Boond + les contacts (fonctions/titres) pour te sortir les pistes ordonnées.
           </p>
         </div>
 
-        {/* Dropzone */}
         <div {...getRootProps()} style={{
           background: '#fff', border: `2px dashed ${isDragActive ? '#1400FF' : '#d0d0e0'}`,
           borderRadius: 14, padding: 40, marginBottom: 16, textAlign: 'center',
@@ -415,18 +444,14 @@ export default function PushPage() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
-          <button
-            onClick={analyze}
-            disabled={!file || loading}
-            style={{
-              background: (!file || loading) ? '#999' : '#1400FF', color: '#fff',
-              border: 'none', borderRadius: 10, padding: '12px 28px',
-              fontFamily: 'Montserrat, sans-serif', fontSize: 14, fontWeight: 600,
-              cursor: (!file || loading) ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 8
-            }}
-          >
-            {loading ? <><Loader2 size={14} className="mtch-spin" /> Analyse Boond…</> : <><FileText size={14} /> Trouver les pistes</>}
+          <button onClick={analyze} disabled={!file || loading} style={{
+            background: (!file || loading) ? '#999' : '#1400FF', color: '#fff',
+            border: 'none', borderRadius: 10, padding: '12px 28px',
+            fontFamily: 'Montserrat, sans-serif', fontSize: 14, fontWeight: 600,
+            cursor: (!file || loading) ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', gap: 8
+          }}>
+            {loading ? <><Loader2 size={14} className="pp-spin" /> Analyse Boond…</> : <><FileText size={14} /> Trouver les pistes</>}
           </button>
         </div>
 
@@ -435,35 +460,33 @@ export default function PushPage() {
             background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
             padding: 32, textAlign: 'center', color: '#888', fontSize: 13
           }}>
-            <div>Lecture PDF → extraction profil → scan opportunités & comptes → scoring IA → contacts référents…</div>
-            <div style={{ fontSize: 11, marginTop: 6, color: '#aaa' }}>~1-2 min selon la volumétrie</div>
+            <div>Lecture PDF → extraction profil → scan opportunités & contacts → scoring IA…</div>
+            <div style={{ fontSize: 11, marginTop: 6, color: '#aaa' }}>~1 min pour le mode rapide</div>
           </div>
         )}
 
-        {data && (
+        {state && (
           <>
-            {/* Profil extrait */}
+            {/* Bloc profil */}
             <div style={{
               background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
               padding: 18, marginBottom: 20
             }}>
-              <div style={{
-                fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#111'
-              }}>
-                {data.profile?.firstName} {data.profile?.lastName}
+              <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#111' }}>
+                {state.profile?.firstName} {state.profile?.lastName}
               </div>
-              {data.profile?.role && (
-                <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{data.profile.role}</div>
+              {state.profile?.role && (
+                <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{state.profile.role}</div>
               )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                {(data.profile?.stack_keywords || []).map(k => (
+                {(state.profile?.stack_keywords_simple || []).map(k => (
                   <span key={k} style={{
                     fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 500,
                     padding: '3px 9px', borderRadius: 10,
                     background: 'rgba(20,0,255,0.08)', color: '#1400FF'
                   }}>{k}</span>
                 ))}
-                {(data.profile?.sectors || []).map(s => (
+                {(state.profile?.sectors || []).map(s => (
                   <span key={s} style={{
                     fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 500,
                     padding: '3px 9px', borderRadius: 10,
@@ -471,52 +494,86 @@ export default function PushPage() {
                   }}>{s}</span>
                 ))}
               </div>
-              {data.profile?.summary && (
+              {state.profile?.summary && (
                 <div style={{ fontSize: 12, color: '#666', marginTop: 10, fontStyle: 'italic' }}>
-                  {data.profile.summary}
+                  {state.profile.summary}
                 </div>
               )}
               <div style={{
-                fontSize: 11, color: '#aaa', marginTop: 10,
-                borderTop: '1px solid #f0f0f5', paddingTop: 8
+                fontSize: 11, color: '#888', marginTop: 12,
+                borderTop: '1px solid #f0f0f5', paddingTop: 10,
+                display: 'flex', flexWrap: 'wrap', gap: 12
               }}>
-                Keywords scannés : <code>{(data.counts?.keywordsUsed || []).join(', ')}</code> · {data.counts?.opportunitiesScanned} opps + {data.counts?.companiesScanned} comptes scannés
+                <span>🎯 <strong>{state.totalLeads}</strong> pistes retenues (score ≥ 30)</span>
+                <span>📊 Scan : {state.counts?.opportunitiesScanned || 0} besoins + {state.counts?.contactsScanned || 0} contacts</span>
+                {state.counts?.deepAdditionalLeads != null && (
+                  <span>🔍 Scan profond : +{state.counts.deepAdditionalLeads} pistes ajoutées</span>
+                )}
               </div>
+              {(state.counts?.keywordsComposed?.length > 0) && (
+                <div style={{ fontSize: 11, color: '#aaa', marginTop: 6 }}>
+                  Keywords composés : {state.counts.keywordsComposed.map(k => (
+                    <code key={k} style={{ background: '#f0f0f5', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{k}</code>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Opportunités ouvertes */}
-            <SectionHeader icon={<Briefcase size={16} />} title={`🎯 Opportunités OUVERTES à pusher (${data.opportunitiesOpen?.length || 0})`} />
-            {data.opportunitiesOpen?.length === 0 ? (
-              <EmptyBlock text="Aucune opportunité en cours ne matche." />
+            {/* Bouton scan profond */}
+            {!state.deepScanDone && (
+              <div style={{ marginBottom: 16, textAlign: 'center' }}>
+                <button onClick={runDeepScan} disabled={deepLoading} style={{
+                  background: '#fff', color: '#1400FF',
+                  border: '1.5px solid #1400FF', borderRadius: 10,
+                  padding: '10px 20px', cursor: deepLoading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
+                  display: 'inline-flex', alignItems: 'center', gap: 8
+                }}>
+                  {deepLoading
+                    ? <><Loader2 size={14} className="pp-spin" /> Lecture des notes/actions des contacts… (~2 min)</>
+                    : <><Zap size={14} /> Scanner en profondeur (notes/actions des contacts)</>
+                  }
+                </button>
+              </div>
+            )}
+
+            {/* Liste unifiée des pistes */}
+            {state.leads.length === 0 ? (
+              <div style={{
+                background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
+                padding: 32, textAlign: 'center', color: '#888', fontSize: 13
+              }}>
+                Aucune piste avec score ≥ 30. Essaie le scan profond ou vérifie les keywords extraits.
+              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-                {data.opportunitiesOpen.map(o => (
-                  <LeadCard key={o.id} item={o} kind="opportunity" onPush={i => openPush(i, 'opportunity')} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                {state.leads.map(l => (
+                  <LeadRow key={l.id} lead={l} onPush={lead => setModal({ open: true, lead })} />
                 ))}
               </div>
             )}
 
-            {/* Opportunités fermées à re-pitcher */}
-            <SectionHeader icon={<Briefcase size={16} />} title={`🔄 Opportunités PASSÉES à re-pitcher (${data.opportunitiesClosed?.length || 0})`} />
-            {data.opportunitiesClosed?.length === 0 ? (
-              <EmptyBlock text="Aucune opportunité passée pertinente." />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-                {data.opportunitiesClosed.map(o => (
-                  <LeadCard key={o.id} item={o} kind="opportunity" onPush={i => openPush(i, 'opportunity')} />
-                ))}
+            {/* Bouton "15 suivantes" */}
+            {state.hasMore && (
+              <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                <button onClick={loadMore} disabled={pageLoading} style={{
+                  background: '#fff', color: '#1400FF',
+                  border: '1.5px solid #1400FF', borderRadius: 10,
+                  padding: '10px 24px', cursor: pageLoading ? 'not-allowed' : 'pointer',
+                  fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
+                  display: 'inline-flex', alignItems: 'center', gap: 8
+                }}>
+                  {pageLoading
+                    ? <><Loader2 size={14} className="pp-spin" /> Chargement…</>
+                    : <><ChevronDown size={14} /> 15 pistes suivantes ({state.leads.length}/{state.totalLeads})</>
+                  }
+                </button>
               </div>
             )}
 
-            {/* Comptes proactifs */}
-            <SectionHeader icon={<Building2 size={16} />} title={`🏢 Comptes clients à approcher en proactif (${data.companies?.length || 0})`} />
-            {data.companies?.length === 0 ? (
-              <EmptyBlock text="Aucun compte pertinent." />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-                {data.companies.map(c => (
-                  <LeadCard key={c.id} item={c} kind="company" onPush={i => openPush(i, 'company')} />
-                ))}
+            {!state.hasMore && state.leads.length > 0 && (
+              <div style={{ textAlign: 'center', fontSize: 11, color: '#aaa', marginBottom: 20 }}>
+                Fin de la liste — {state.totalLeads} pistes au total
               </div>
             )}
           </>
@@ -524,36 +581,16 @@ export default function PushPage() {
 
         <PushModal
           open={modal.open}
-          onClose={() => setModal({ open: false, target: null, kind: null, opportunity: null })}
-          profile={data?.profile}
-          target={modal.target}
-          kind={modal.kind}
-          opportunity={modal.opportunity}
+          onClose={() => setModal({ open: false, lead: null })}
+          profile={state?.profile}
+          lead={modal.lead}
         />
 
         <style>{`
-          .mtch-spin { animation: mtch-spin 1s linear infinite; }
-          @keyframes mtch-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          .pp-spin { animation: pp-spin 1s linear infinite; }
+          @keyframes pp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         `}</style>
       </main>
     </div>
-  )
-}
-
-function SectionHeader({ icon, title }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-      fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
-      color: '#1400FF', textTransform: 'uppercase', letterSpacing: '0.03em'
-    }}>{icon} {title}</div>
-  )
-}
-function EmptyBlock({ text }) {
-  return (
-    <div style={{
-      background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
-      padding: 18, textAlign: 'center', color: '#888', fontSize: 13, marginBottom: 24
-    }}>{text}</div>
   )
 }

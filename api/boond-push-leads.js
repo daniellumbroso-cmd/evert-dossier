@@ -9,6 +9,17 @@ export const config = {
   maxDuration: 300
 }
 
+// ── Cache mémoire pour la pagination ──
+const SESSION_CACHE = new Map()
+const CACHE_TTL_MS = 20 * 60 * 1000
+
+function cleanCache() {
+  const now = Date.now()
+  for (const [k, v] of SESSION_CACHE.entries()) {
+    if (now - v.scannedAt > CACHE_TTL_MS) SESSION_CACHE.delete(k)
+  }
+}
+
 function buildBoondJWT(userToken, clientToken, clientKey) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', type: 'JWT' })).toString('base64').replace(/=/g, '')
   const payload = Buffer.from(JSON.stringify({
@@ -39,30 +50,30 @@ async function boondGet(apiUrl, path, headers) {
   }
 }
 
-// Claude extrait le profil du consultant à partir du texte du dossier PDF
 async function extractProfileFromPdf(anthropic, pdfText) {
   const text = (pdfText || '').slice(0, 15000)
   const system = `Extrais le profil d'un consultant à partir de son dossier de compétences.
-Réponds UNIQUEMENT par un JSON valide, sans markdown, sans commentaire.
+Réponds UNIQUEMENT par un JSON valide, sans markdown.
 
 Format :
 {
   "firstName": "Alexandre",
   "lastName": "Hunault",
   "role": "Développeur Back-end Senior PHP / Symfony",
-  "stack_keywords": ["PHP", "Symfony", "API Platform", "PostgreSQL", "RabbitMQ"],
-  "sectors": ["presse/média", "SaaS anti-fraude", "e-commerce"],
-  "clients_past": ["Le Monde", "Bayard", "Chaynon"],
+  "stack_keywords_simple": ["PHP", "Symfony", "API Platform", "PostgreSQL"],
+  "stack_keywords_composed": ["PHP Symfony", "API Platform Symfony", "Symfony backend senior"],
+  "sectors": ["presse/média", "SaaS anti-fraude"],
+  "clients_past": ["Le Monde", "Bayard"],
   "seniority": "senior",
   "experience_years": 15,
-  "summary": "1-2 phrases synthèse du profil"
+  "summary": "1-2 phrases synthèse"
 }
 
 Règles :
-- 4 à 8 keywords stack, les plus distinctifs (évite "Git", "REST", "Agile" = trop généraux)
-- Secteurs = domaines métier des clients passés
-- clients_past : marques déjà servies (pour éviter de re-pusher chez le même)
-- Pas d'invention, si absent → null ou tableau vide`
+- stack_keywords_simple : 3-5 mots UNIQUES très distinctifs (pas "Git", "REST", "Agile")
+- stack_keywords_composed : 3-5 combinaisons de 2-3 mots (plus précises pour matcher les titres de besoin)
+- Ordre du plus distinctif au moins distinctif
+- Pas d'invention`
 
   const r = await anthropic.messages.create({
     model: 'claude-opus-4-5',
@@ -73,54 +84,90 @@ Règles :
   const raw = r.content?.[0]?.text || '{}'
   const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
   try { return JSON.parse(clean) }
-  catch { return { firstName: '', lastName: '', role: '', stack_keywords: [], sectors: [], clients_past: [], seniority: '', experience_years: 0, summary: '' } }
+  catch { return { firstName: '', lastName: '', role: '', stack_keywords_simple: [], stack_keywords_composed: [], sectors: [], clients_past: [], seniority: '', experience_years: 0, summary: '' } }
 }
 
-// Récupère le référent (contact principal) d'un compte via /companies/{id}/information
-async function fetchCompanyContact(apiUrl, headers, companyId) {
-  const r = await boondGet(apiUrl, `/companies/${companyId}/information`, headers)
-  if (r.status !== 200) return null
-  const included = Array.isArray(r.body?.included) ? r.body.included : []
-  // Cherche le premier contact dans les included
-  const contact = included.find(i => i.type === 'contact' || i.type === 'contacts')
-  if (!contact) return null
-  const a = contact.attributes || {}
+async function scanBoond(apiUrl, headers, profile, deep = false) {
+  const simple = (profile.stack_keywords_simple || []).slice(0, 4)
+  const composed = (profile.stack_keywords_composed || []).slice(0, 4)
+
+  const oppMap = new Map()
+  const contactMap = new Map()
+
+  // Passe A : composés sur /opportunities
+  for (const kw of composed) {
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '20', page: '1' })
+    const r = await boondGet(apiUrl, `/opportunities?${qs}`, headers)
+    for (const row of (r.body?.data || [])) {
+      const ex = oppMap.get(row.id) || { row, matchedOn: [] }
+      ex.matchedOn.push(kw)
+      oppMap.set(row.id, ex)
+    }
+  }
+  // Passe B : simples sur /opportunities
+  for (const kw of simple) {
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '15', page: '1' })
+    const r = await boondGet(apiUrl, `/opportunities?${qs}`, headers)
+    for (const row of (r.body?.data || [])) {
+      const ex = oppMap.get(row.id) || { row, matchedOn: [] }
+      if (!ex.matchedOn.includes(kw)) ex.matchedOn.push(kw)
+      oppMap.set(row.id, ex)
+    }
+  }
+  // Passe C : simples sur /contacts (matche titres/fonctions type "Dev Symfony")
+  for (const kw of simple) {
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '20', page: '1' })
+    const r = await boondGet(apiUrl, `/contacts?${qs}`, headers)
+    for (const row of (r.body?.data || [])) {
+      const ex = contactMap.get(row.id) || { row, matchedOn: [] }
+      ex.matchedOn.push(kw)
+      contactMap.set(row.id, ex)
+    }
+  }
+
+  // Mode profond : lire les actions de chaque contact
+  const contactActions = new Map()
+  if (deep) {
+    const contactIds = Array.from(contactMap.keys()).slice(0, 30)
+    await Promise.all(contactIds.map(async id => {
+      const r = await boondGet(apiUrl, `/contacts/${id}/actions?maxResults=10`, headers)
+      const actions = (r.body?.data || []).map(a => ({ id: a.id, ...a.attributes }))
+      if (actions.length) contactActions.set(id, actions)
+    }))
+  }
+
   return {
-    id: contact.id,
-    firstName: a.firstName || '',
-    lastName: a.lastName || '',
-    function: a.function || a.functionType || '',
-    email: a.email1 || a.email || '',
-    phone: a.phoneNumber1 || a.phone || a.mobileNumber || ''
+    opportunities: Array.from(oppMap.values()),
+    contacts: Array.from(contactMap.values()),
+    contactActions
   }
 }
 
-// Scoring d'une liste (opportunités OU comptes) via Claude
-async function scoreItems(anthropic, profile, items, kind) {
-  if (!items.length) return []
-  const compact = items.slice(0, 40).map(x => {
-    const a = x.attributes || {}
-    return kind === 'opportunity'
-      ? {
-          id: x.id,
-          title: a.title || '',
-          reference: a.reference || '',
-          state: a.state,
-          company: a.company || a.companyName || '',
-          description: (a.description || '').slice(0, 400)
-        }
-      : {
-          id: x.id,
-          name: a.name || '',
-          activityArea: a.activityArea || '',
-          town: a.town || a.city || '',
-          description: (a.description || '').slice(0, 300)
-        }
-  })
+function extractContactCompany(contactRow) {
+  const a = contactRow.attributes || {}
+  return {
+    id: contactRow.id,
+    firstName: a.firstName || '',
+    lastName: a.lastName || '',
+    function: a.function || a.functionType || a.title || '',
+    email: a.email1 || a.email || '',
+    phone: a.phoneNumber1 || a.phone || a.mobileNumber || '',
+    companyId: a.companyId || null,
+    companyName: a.companyName || a.company || ''
+  }
+}
 
-  const kindLabel = kind === 'opportunity' ? 'opportunité client' : 'compte client'
-  const clientsPastStr = (profile.clients_past || []).join(', ') || 'aucun connu'
-  const system = `Tu évalues la pertinence d'une ${kindLabel} pour PUSHER PROACTIVEMENT le profil d'un consultant.
+async function scoreAllLeads(anthropic, profile, leadsForScoring) {
+  if (!leadsForScoring.length) return []
+
+  const BATCH_SIZE = 25
+  const batches = []
+  for (let i = 0; i < leadsForScoring.length; i += BATCH_SIZE) {
+    batches.push(leadsForScoring.slice(i, i + BATCH_SIZE))
+  }
+
+  const clientsPast = (profile.clients_past || []).join(', ') || 'aucun'
+  const system = `Tu évalues la pertinence de pistes business pour PUSHER un consultant chez un client.
 
 Réponds UNIQUEMENT par un tableau JSON, sans markdown.
 
@@ -128,35 +175,63 @@ Format : [{ "id": "...", "score": 85, "reason": "..." }]
 
 Règles :
 - score : entier 0-100
-  * 80+ = match stack + secteur très clair, opportunité pertinente immédiatement
-  * 60-79 = match stack correct, potentiel à creuser
-  * 40-59 = match partiel, à considérer sans urgence
-  * < 40 = à écarter, ne pas inclure dans la réponse
-- reason : 1 phrase FR max 25 mots, cite explicitement pourquoi (techno commune, secteur, contexte)
-- Sois strict : ne mets pas 80+ juste parce qu'un mot-clé matche
-- Évite les scores élevés pour les clients où le consultant a DÉJÀ travaillé (clients passés : ${clientsPastStr})
-- Conserve l'id exact`
+  * 80+ = stack très clairement alignée + contexte pertinent
+  * 60-79 = match stack clair, contexte à creuser
+  * 40-59 = match partiel intéressant
+  * 30-39 = signal faible mais gardé pour tri manuel
+  * < 30 = à écarter
+- reason : 2-3 phrases FR max 50 mots. Explique CONCRÈTEMENT : quelle techno, quel signal (titre du besoin / fonction du contact / note), pourquoi c'est une piste
+- Pénalise ${clientsPast} (déjà servis)
+- Utilise 'matchedOn' pour comprendre le match
+- Sois généreux 30-60 pour laisser du volume, critique sur 60+`
 
-  const userMsg = `Profil consultant à pusher :
+  const userBase = `Profil consultant à pusher :
 - Rôle : ${profile.role}
-- Stack : ${(profile.stack_keywords || []).join(', ')}
-- Secteurs de prédilection : ${(profile.sectors || []).join(', ')}
-- Séniorité : ${profile.seniority} (${profile.experience_years || '?'} ans XP)
-- Synthèse : ${profile.summary}
+- Stack : ${(profile.stack_keywords_simple || []).join(', ')}
+- Secteurs : ${(profile.sectors || []).join(', ')}
+- Séniorité : ${profile.seniority} (${profile.experience_years || '?'} ans)
+- Clients passés : ${clientsPast}
+- Résumé : ${profile.summary}`
 
-${kindLabel === 'opportunité client' ? 'Opportunités' : 'Comptes'} à évaluer :
-${JSON.stringify(compact, null, 2)}`
+  const allScores = []
+  for (const batch of batches) {
+    const userMsg = `${userBase}
 
-  const r = await anthropic.messages.create({
-    model: 'claude-opus-4-5',
-    max_tokens: 4000,
-    system,
-    messages: [{ role: 'user', content: userMsg }]
+Pistes à évaluer :
+${JSON.stringify(batch, null, 2)}`
+
+    try {
+      const r = await anthropic.messages.create({
+        model: 'claude-opus-4-5',
+        max_tokens: 4000,
+        system,
+        messages: [{ role: 'user', content: userMsg }]
+      })
+      const raw = r.content?.[0]?.text || '[]'
+      const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+      const parsed = JSON.parse(clean)
+      allScores.push(...parsed)
+    } catch (e) {
+      console.error('score batch failed', e.message)
+    }
+  }
+  return allScores
+}
+
+// Priorise contact dont la fonction matche la stack
+function pickBestContact(contacts, stackWords) {
+  if (!contacts.length) return null
+  const lowerStack = stackWords.map(s => s.toLowerCase()).filter(Boolean)
+  const withScore = contacts.map(c => {
+    const fn = (c.function || '').toLowerCase()
+    let s = 0
+    for (const w of lowerStack) if (w && fn.includes(w)) s += 10
+    if (/cto|vp|head|lead|principal|director technique|responsable tech/i.test(fn)) s += 5
+    if (/manager|senior/i.test(fn)) s += 2
+    return { c, s }
   })
-  const raw = r.content?.[0]?.text || '[]'
-  const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
-  try { return JSON.parse(clean) }
-  catch { return [] }
+  withScore.sort((a, b) => b.s - a.s)
+  return withScore[0].c
 }
 
 export default async function handler(req, res) {
@@ -164,6 +239,8 @@ export default async function handler(req, res) {
 
   const session = getSession(req)
   if (!session) return res.status(401).json({ error: 'Non authentifié' })
+
+  cleanCache()
 
   const clientToken = process.env.BOOND_CLIENT_TOKEN
   const clientKey = process.env.BOOND_CLIENT_KEY
@@ -182,8 +259,90 @@ export default async function handler(req, res) {
     'Accept': 'application/json'
   }
 
-  const form = formidable({ maxFileSize: 15 * 1024 * 1024 })
+  const contentType = req.headers['content-type'] || ''
 
+  // ═══ CAS 1 : Pagination / deep scan sur cache existant ═══
+  if (contentType.includes('application/json')) {
+    let body = ''
+    await new Promise(r => { req.on('data', c => body += c); req.on('end', r) })
+    let parsed = {}
+    try { parsed = JSON.parse(body) } catch {}
+
+    const { cacheKey, page = 1, action = 'next' } = parsed
+    if (!cacheKey || !SESSION_CACHE.has(cacheKey)) {
+      return res.status(404).json({ error: 'Cache expiré, relance l\'analyse' })
+    }
+    const cached = SESSION_CACHE.get(cacheKey)
+
+    if (action === 'deep_scan' && !cached.deepScanDone) {
+      try {
+        const anthropic = new Anthropic({ apiKey: anthropicKey })
+        const deepScan = await scanBoond(apiUrl, boondHeaders, cached.profile, true)
+        const additionalLeads = []
+        for (const [contactId, actions] of deepScan.contactActions.entries()) {
+          const notesText = actions
+            .map(a => `[${a.type || 'note'} ${a.date || ''}] ${(a.description || a.title || '').slice(0, 300)}`)
+            .join('\n')
+          if (!notesText.trim()) continue
+          const contactRow = deepScan.contacts.find(c => c.row.id === contactId)
+          const c = contactRow ? extractContactCompany(contactRow.row) : { id: contactId, firstName: '?', lastName: '?', function: '', companyName: '', email: '', phone: '' }
+          additionalLeads.push({
+            id: `deep_action_${contactId}`,
+            kind: 'action_note',
+            sourceType: 'Note d\'action contact',
+            title: `Notes sur ${c.firstName} ${c.lastName}`,
+            company: c.companyName || '',
+            contact: c,
+            matchedOn: contactRow?.matchedOn || [],
+            scoringPayload: {
+              id: `deep_action_${contactId}`,
+              kind: 'action_note',
+              contact: `${c.firstName} ${c.lastName} — ${c.function}`,
+              company: c.companyName,
+              notes: notesText.slice(0, 1500),
+              matchedOn: contactRow?.matchedOn || []
+            },
+            boondUrl: `https://ui.boondmanager.com/contacts/${contactId}/information`
+          })
+        }
+        const newScores = await scoreAllLeads(anthropic, cached.profile, additionalLeads.map(l => l.scoringPayload))
+        const scoreMap = new Map(newScores.map(s => [String(s.id), s]))
+        for (const lead of additionalLeads) {
+          const sc = scoreMap.get(String(lead.id))
+          lead.score = sc?.score ?? null
+          lead.reason = sc?.reason || ''
+        }
+        // Fusionne, dédoublonne par id
+        const existingIds = new Set(cached.allLeads.map(l => l.id))
+        const merged = [...cached.allLeads, ...additionalLeads.filter(l => (l.score ?? 0) >= 30 && !existingIds.has(l.id))]
+        cached.allLeads = merged.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+        cached.deepScanDone = true
+        cached.counts.deepAdditionalLeads = additionalLeads.filter(l => (l.score ?? 0) >= 30).length
+      } catch (e) {
+        console.error('deep_scan error', e)
+        return res.status(500).json({ error: 'Scan profond échoué : ' + e.message })
+      }
+    }
+
+    const PAGE_SIZE = 15
+    const start = (page - 1) * PAGE_SIZE
+    const slice = cached.allLeads.slice(start, start + PAGE_SIZE)
+
+    return res.status(200).json({
+      cacheKey,
+      profile: cached.profile,
+      page,
+      pageSize: PAGE_SIZE,
+      totalLeads: cached.allLeads.length,
+      hasMore: start + PAGE_SIZE < cached.allLeads.length,
+      leads: slice,
+      deepScanDone: cached.deepScanDone,
+      counts: cached.counts
+    })
+  }
+
+  // ═══ CAS 2 : Nouvel upload PDF ═══
+  const form = formidable({ maxFileSize: 15 * 1024 * 1024 })
   form.parse(req, async (err, fields, files) => {
     if (err) return res.status(400).json({ error: 'Erreur upload : ' + err.message })
 
@@ -197,118 +356,131 @@ export default async function handler(req, res) {
         const parsed = await pdfParse(buf)
         pdfText = parsed.text || ''
       }
-
       if (!pdfText.trim()) {
         return res.status(400).json({ error: 'Aucun contenu PDF exploitable' })
       }
 
       const anthropic = new Anthropic({ apiKey: anthropicKey })
-
-      // 1. Extraction profil depuis le PDF
       const profile = await extractProfileFromPdf(anthropic, pdfText)
 
-      // 2. Scan Boond : opportunités + comptes sur les top keywords
-      const topKeywords = (profile.stack_keywords || []).slice(0, 4)
-      if (!topKeywords.length) {
+      if (!(profile.stack_keywords_simple?.length || profile.stack_keywords_composed?.length)) {
         return res.status(200).json({
-          profile, opportunities: [], companies: [],
-          counts: { opportunitiesScanned: 0, companiesScanned: 0 },
-          warning: 'Aucun keyword stack extrait du PDF — impossible de scanner Boond.'
+          profile, leads: [], totalLeads: 0,
+          warning: 'Aucun keyword stack extrait du PDF.'
         })
       }
 
-      const oppMap = new Map()
-      const compMap = new Map()
+      const scan = await scanBoond(apiUrl, boondHeaders, profile, false)
 
-      for (const kw of topKeywords) {
-        const qs = new URLSearchParams({ keywords: kw, maxResults: '15', page: '1' })
-        // Opportunités
-        const oppR = await boondGet(apiUrl, `/opportunities?${qs}`, boondHeaders)
-        for (const row of (oppR.body?.data || [])) {
-          if (!oppMap.has(row.id)) oppMap.set(row.id, row)
-        }
-        // Comptes
-        const compR = await boondGet(apiUrl, `/companies?${qs}`, boondHeaders)
-        for (const row of (compR.body?.data || [])) {
-          if (!compMap.has(row.id)) compMap.set(row.id, row)
-        }
-      }
+      const allLeadsRaw = []
 
-      const opportunities = Array.from(oppMap.values())
-      const companies = Array.from(compMap.values())
-
-      // 3. Scoring par Claude
-      const [oppScores, compScores] = await Promise.all([
-        scoreItems(anthropic, profile, opportunities, 'opportunity'),
-        scoreItems(anthropic, profile, companies, 'company')
-      ])
-      const oppMapScore = new Map(oppScores.map(x => [String(x.id), x]))
-      const compMapScore = new Map(compScores.map(x => [String(x.id), x]))
-
-      // 4. Enrichissement : split opportunités par statut, fetch contacts pour comptes ≥ 60
-      const rawOpps = opportunities
-        .map(o => {
-          const sc = oppMapScore.get(String(o.id))
-          const a = o.attributes || {}
-          return {
-            id: o.id,
+      // Opportunités
+      for (const opp of scan.opportunities) {
+        const a = opp.row.attributes || {}
+        const state = a.state
+        const stateLabel = { '1': 'En cours', '2': 'Gagné', '3': 'Perdu', '0': 'Abandonné' }[String(state)] || `Statut ${state}`
+        allLeadsRaw.push({
+          id: `opp_${opp.row.id}`,
+          kind: 'opportunity',
+          sourceType: `Besoin Boond — ${stateLabel}`,
+          state, stateLabel,
+          title: a.title || a.reference || `Opportunité #${opp.row.id}`,
+          company: a.company || a.companyName || '',
+          companyId: a.companyId || null,
+          reference: a.reference || '',
+          startDate: a.startDate || '',
+          contact: null,
+          matchedOn: opp.matchedOn,
+          scoringPayload: {
+            id: `opp_${opp.row.id}`,
+            kind: 'opportunity',
             title: a.title || '',
             reference: a.reference || '',
-            state: a.state,
-            company: a.company || a.companyName || '',
-            companyId: a.companyId || null,
-            startDate: a.startDate || '',
-            score: sc?.score ?? null,
-            reason: sc?.reason || '',
-            boondUrl: `https://ui.boondmanager.com/opportunities/${o.id}/information`
-          }
+            state: stateLabel,
+            company: a.company || '',
+            description: (a.description || '').slice(0, 400),
+            matchedOn: opp.matchedOn
+          },
+          boondUrl: `https://ui.boondmanager.com/opportunities/${opp.row.id}/information`
         })
-        .filter(o => (o.score ?? 0) >= 40)
+      }
+
+      // Contacts (regroupés par entreprise)
+      const contactsByCompany = new Map()
+      for (const c of scan.contacts) {
+        const info = extractContactCompany(c.row)
+        const key = info.companyId || info.companyName || `contact_${info.id}`
+        const existing = contactsByCompany.get(key) || { contacts: [], matchedOn: new Set() }
+        existing.contacts.push({ info, matchedOn: c.matchedOn })
+        c.matchedOn.forEach(m => existing.matchedOn.add(m))
+        contactsByCompany.set(key, existing)
+      }
+
+      const stackWords = [
+        ...(profile.stack_keywords_simple || []),
+        ...(profile.stack_keywords_composed || []).flatMap(k => k.split(' '))
+      ]
+
+      for (const [key, group] of contactsByCompany.entries()) {
+        const list = group.contacts.map(x => x.info)
+        const best = pickBestContact(list, stackWords)
+        if (!best) continue
+        allLeadsRaw.push({
+          id: `contact_${best.id}`,
+          kind: 'contact',
+          sourceType: 'Contact opérationnel (fonction stack)',
+          title: `${best.firstName} ${best.lastName}${best.function ? ' — ' + best.function : ''}`,
+          company: best.companyName,
+          companyId: best.companyId,
+          contact: best,
+          otherContactsCount: list.length - 1,
+          matchedOn: Array.from(group.matchedOn),
+          scoringPayload: {
+            id: `contact_${best.id}`,
+            kind: 'contact',
+            fullName: `${best.firstName} ${best.lastName}`,
+            function: best.function,
+            company: best.companyName,
+            matchedOn: Array.from(group.matchedOn)
+          },
+          boondUrl: `https://ui.boondmanager.com/contacts/${best.id}/information`
+        })
+      }
+
+      const scores = await scoreAllLeads(anthropic, profile, allLeadsRaw.map(l => l.scoringPayload))
+      const scoreMap = new Map(scores.map(s => [String(s.id), s]))
+
+      const allLeads = allLeadsRaw
+        .map(l => {
+          const sc = scoreMap.get(String(l.id))
+          return { ...l, score: sc?.score ?? null, reason: sc?.reason || '' }
+        })
+        .filter(l => (l.score ?? 0) >= 30)
         .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
 
-      // Séparation par statut : 1=en cours, 2=won, 3=lost, 0=abandonné, autres
-      const oppsOpen = rawOpps.filter(o => String(o.state) === '1')
-      const oppsClosed = rawOpps.filter(o => ['2', '3', '0'].includes(String(o.state)))
-      const oppsOther = rawOpps.filter(o => !['0', '1', '2', '3'].includes(String(o.state)))
-
-      // Comptes ≥ 40 avec fetch contact pour les top ≥ 60
-      const rankedComps = companies
-        .map(c => {
-          const sc = compMapScore.get(String(c.id))
-          const a = c.attributes || {}
-          return {
-            id: c.id,
-            name: a.name || '',
-            activityArea: a.activityArea || '',
-            town: a.town || a.city || '',
-            score: sc?.score ?? null,
-            reason: sc?.reason || '',
-            boondUrl: `https://ui.boondmanager.com/companies/${c.id}/information`,
-            contact: null
-          }
-        })
-        .filter(c => (c.score ?? 0) >= 40)
-        .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-
-      // Fetch contact référent pour les 10 premiers comptes ≥ 60
-      const topComps = rankedComps.filter(c => c.score >= 60).slice(0, 10)
-      await Promise.all(topComps.map(async c => {
-        c.contact = await fetchCompanyContact(apiUrl, boondHeaders, c.id)
-      }))
-
-      return res.status(200).json({
-        profile,
-        opportunitiesOpen: oppsOpen,
-        opportunitiesClosed: oppsClosed,
-        opportunitiesOther: oppsOther,
-        companies: rankedComps,
+      const cacheKey = crypto.randomBytes(12).toString('hex')
+      SESSION_CACHE.set(cacheKey, {
+        profile, allLeads,
+        scannedAt: Date.now(),
+        deepScanDone: false,
         counts: {
-          keywordsUsed: topKeywords,
-          opportunitiesScanned: opportunities.length,
-          companiesScanned: companies.length,
-          opportunitiesRelevant: rawOpps.length,
-          companiesRelevant: rankedComps.length
+          keywordsSimple: profile.stack_keywords_simple || [],
+          keywordsComposed: profile.stack_keywords_composed || [],
+          opportunitiesScanned: scan.opportunities.length,
+          contactsScanned: scan.contacts.length,
+          leadsRetained: allLeads.length
         }
+      })
+
+      const PAGE_SIZE = 15
+      return res.status(200).json({
+        cacheKey, profile,
+        page: 1, pageSize: PAGE_SIZE,
+        totalLeads: allLeads.length,
+        hasMore: allLeads.length > PAGE_SIZE,
+        leads: allLeads.slice(0, PAGE_SIZE),
+        deepScanDone: false,
+        counts: SESSION_CACHE.get(cacheKey).counts
       })
     } catch (e) {
       console.error('boond-push-leads error', e)
