@@ -200,6 +200,7 @@ function parseContactFull(json) {
   const included = Array.isArray(json.included) ? json.included : []
   const company = included.find(i => (i.type === 'company' || i.type === 'companies'))
   return {
+    id: json.data.id,
     firstName: a.firstName || '',
     lastName: a.lastName || '',
     function: a.function || a.functionType || a.title || '',
@@ -552,6 +553,8 @@ export default async function handler(req, res) {
       const enrichedContacts = await Promise.all(scan.contacts.map(async c => {
         const r = await boondGet(apiUrl, `/contacts/${c.row.id}/information`, boondHeaders)
         const full = parseContactFull(r.body)
+        // Garantit qu'on a toujours l'id : priorité à parseContactFull, sinon fallback sur l'id du scan
+        if (full) full.id = full.id || c.row.id
         return { c, full }
       }))
 
