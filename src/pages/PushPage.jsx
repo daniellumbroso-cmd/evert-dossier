@@ -55,7 +55,8 @@ function SourcePill({ sourceType, kind }) {
   const map = {
     'opportunity': { icon: <Briefcase size={10} />, color: '#b57a00', bg: 'rgba(255,170,0,0.12)' },
     'contact': { icon: <User size={10} />, color: '#5b3df5', bg: 'rgba(91,61,245,0.10)' },
-    'action_note': { icon: <MessageSquare size={10} />, color: '#1d8b4f', bg: 'rgba(40,180,99,0.10)' }
+    'action_note': { icon: <MessageSquare size={10} />, color: '#1d8b4f', bg: 'rgba(40,180,99,0.10)' },
+    'company_direct': { icon: <Building2 size={10} />, color: '#c2410c', bg: 'rgba(194,65,12,0.10)' }
   }
   const conf = map[kind] || { icon: null, color: '#555', bg: '#f0f0f5' }
   return (
@@ -219,6 +220,7 @@ function PushModal({ open, onClose, profile, lead }) {
 
 // ─── Carte piste ────
 function LeadRow({ lead, onPush }) {
+  const [expanded, setExpanded] = useState(false)
   return (
     <div style={{
       background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
@@ -287,10 +289,41 @@ function LeadRow({ lead, onPush }) {
                 <Phone size={11} /> {lead.contact.phone}
               </span>
             )}
-            {lead.otherContactsCount > 0 && (
-              <span style={{ color: '#888', fontStyle: 'italic', fontSize: 11 }}>
-                (+{lead.otherContactsCount} autre{lead.otherContactsCount > 1 ? 's' : ''} dans ce compte)
-              </span>
+          </div>
+        )}
+
+        {/* Ligne 5bis : autres contacts dépliables */}
+        {lead.otherContactsCount > 0 && (
+          <div style={{ marginBottom: 6 }}>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: '#1400FF', fontSize: 11, fontFamily: 'Montserrat, sans-serif',
+                fontWeight: 600, padding: '4px 0',
+                display: 'inline-flex', alignItems: 'center', gap: 4
+              }}
+            >
+              {expanded ? '▼' : '▶'} {expanded ? 'Masquer' : 'Voir'} les {lead.otherContactsCount} autre{lead.otherContactsCount > 1 ? 's' : ''} contact{lead.otherContactsCount > 1 ? 's' : ''} de ce compte
+            </button>
+            {expanded && (
+              <div style={{
+                marginTop: 6, paddingLeft: 12, borderLeft: '2px solid #e0e0f0',
+                display: 'flex', flexDirection: 'column', gap: 4
+              }}>
+                {lead.otherContacts?.map(c => (
+                  <div key={c.id} style={{
+                    fontSize: 11, color: '#444',
+                    display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+                    padding: '4px 8px', background: '#fafaff', borderRadius: 6
+                  }}>
+                    <span><strong>{c.firstName} {c.lastName}</strong>{c.function && <span style={{ color: '#666' }}> — {c.function}</span>}</span>
+                    {c.email && <a href={`mailto:${c.email}`} style={{ color: '#1400FF', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Mail size={10} />{c.email}</a>}
+                    {c.phone && <span style={{ color: '#888', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Phone size={10} />{c.phone}</span>}
+                    <a href={c.boondUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#888', textDecoration: 'none', marginLeft: 'auto' }}>Boond ↗</a>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -520,15 +553,27 @@ export default function PushPage() {
                 display: 'flex', flexWrap: 'wrap', gap: 12
               }}>
                 <span>🎯 <strong>{allLeads.length}</strong> pistes retenues</span>
-                {counts?.byStatus && (
+                {counts?.byKind && (
                   <>
-                    <span>🟢 {counts.byStatus.active_client} clients actifs</span>
-                    <span>🔵 {counts.byStatus.past_client} anciens clients</span>
-                    <span>🟠 {counts.byStatus.prospect} prospects</span>
-                    <span>⚪ {counts.byStatus.unknown} inconnus</span>
+                    <span>💼 {counts.byKind.opportunity || 0} besoins</span>
+                    <span>👤 {counts.byKind.contact || 0} contacts</span>
+                    <span>🏢 {counts.byKind.company_direct || 0} sociétés</span>
+                    {counts.byKind.action_note > 0 && <span>📝 {counts.byKind.action_note} notes</span>}
                   </>
                 )}
+                <span style={{ marginLeft: 'auto', color: '#aaa' }}>Scan : {counts?.opportunitiesScanned || 0} opps · {counts?.contactsScanned || 0} contacts · {counts?.companiesDirectScanned || 0} sociétés</span>
               </div>
+              {counts?.byStatus && (
+                <div style={{
+                  fontSize: 11, color: '#888', marginTop: 6,
+                  display: 'flex', flexWrap: 'wrap', gap: 12
+                }}>
+                  <span>🟢 {counts.byStatus.active_client} clients actifs</span>
+                  <span>🔵 {counts.byStatus.past_client} anciens clients</span>
+                  <span>🟠 {counts.byStatus.prospect} prospects</span>
+                  <span>⚪ {counts.byStatus.unknown} inconnus</span>
+                </div>
+              )}
             </div>
 
             {/* Bouton scan profond */}

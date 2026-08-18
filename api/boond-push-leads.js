@@ -95,6 +95,7 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
 
   const oppMap = new Map()
   const contactMap = new Map()
+  const companyMap = new Map()  // Sociétés remontées via /companies (pas via contact ni opp)
 
   // A) composés sur /opportunities
   for (const kw of composed) {
@@ -116,15 +117,32 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
       oppMap.set(row.id, ex)
     }
   }
-  // C) primaires ET secondaires sur /contacts (matche fonctions/titres)
+  // C) PAGINATION sur /contacts : primaires + secondaires, 5 pages max de 30 chacune = 150/keyword
   const contactKeywords = [...primary, ...secondary]
+  const CONTACT_PAGES = 5
+  const CONTACT_PAGE_SIZE = 30
   for (const kw of contactKeywords) {
-    const qs = new URLSearchParams({ keywords: kw, maxResults: '25', page: '1' })
-    const r = await boondGet(apiUrl, `/contacts?${qs}`, headers)
+    for (let page = 1; page <= CONTACT_PAGES; page++) {
+      const qs = new URLSearchParams({ keywords: kw, maxResults: String(CONTACT_PAGE_SIZE), page: String(page) })
+      const r = await boondGet(apiUrl, `/contacts?${qs}`, headers)
+      const rows = r.body?.data || []
+      for (const row of rows) {
+        const ex = contactMap.get(row.id) || { row, matchedOn: [] }
+        if (!ex.matchedOn.includes(kw)) ex.matchedOn.push(kw)
+        contactMap.set(row.id, ex)
+      }
+      // Arrêt si moins d'une page pleine ou aucun résultat → plus rien à récupérer
+      if (rows.length < CONTACT_PAGE_SIZE) break
+    }
+  }
+  // D) /companies sur primaires + composés : capture les sociétés dont nom/desc matche
+  for (const kw of [...primary, ...composed]) {
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '15', page: '1' })
+    const r = await boondGet(apiUrl, `/companies?${qs}`, headers)
     for (const row of (r.body?.data || [])) {
-      const ex = contactMap.get(row.id) || { row, matchedOn: [] }
+      const ex = companyMap.get(row.id) || { row, matchedOn: [] }
       if (!ex.matchedOn.includes(kw)) ex.matchedOn.push(kw)
-      contactMap.set(row.id, ex)
+      companyMap.set(row.id, ex)
     }
   }
 
@@ -141,6 +159,7 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
   return {
     opportunities: Array.from(oppMap.values()),
     contacts: Array.from(contactMap.values()),
+    companiesDirect: Array.from(companyMap.values()),
     contactActions
   }
 }
@@ -229,37 +248,58 @@ Réponds UNIQUEMENT par un tableau JSON, sans markdown.
 
 Format : [{ "id": "...", "score": 85, "reason": "..." }]
 
-RÈGLE ABSOLUE — Ne JAMAIS mettre un score >= 50 si la stack PRINCIPALE du consultant n'est PAS présente dans la piste.
-- Stack PRINCIPALE du consultant : ${primary}
-- Stack SECONDAIRE (accessoires, ne SUFFISENT PAS SEULES) : ${secondary}
+Consultant :
+- Stack PRINCIPALE : ${primary}
+- Stack SECONDAIRE (accessoires) : ${secondary}
 
-Grille de score :
-- 85-100 : stack principale ENTIÈREMENT alignée + contexte pertinent (besoin actif OU contact CTO/Lead/Head sur cette stack)
-- 70-84  : stack principale bien alignée, contexte à creuser
-- 55-69  : stack principale partiellement présente (au moins 1 mot de la ppal + du secondaire)
-- 40-54  : signal faible : SEULEMENT du secondaire, OU stack ppal évoquée en passant. À écarter dans la plupart des cas.
-- < 40   : aucun match sur la stack ppal. À écarter.
+═══ RÈGLES DE SCORING (différentes selon le TYPE de piste : kind) ═══
 
-Cas type à ÉCARTER (score < 40) :
-- Besoin "Développeur Node.js RabbitMQ" alors que la stack ppal du consultant est PHP/Symfony (juste RabbitMQ commun)
-- Besoin "Architecte Java PostgreSQL" alors que ppal = PHP (juste PostgreSQL commun)
+▶ Pour kind = "opportunity" (BESOIN Boond) :
+  RÈGLE STRICTE : score >= 50 UNIQUEMENT si stack PRINCIPALE présente dans le besoin.
+  - 85-100 : stack ppal explicite + contexte pertinent
+  - 70-84  : stack ppal bien alignée
+  - 55-69  : stack ppal partielle
+  - 40-54  : signal faible (que du secondaire, ppal évoquée en passant)
+  - <40    : à écarter (ex: besoin Node.js + RabbitMQ pour un consultant PHP/Symfony)
 
-Cas type CONTACT à valoriser (score 70+) :
-- Un contact avec fonction "Head of Backend PHP" ou "CTO Symfony" → bon score même sans besoin actif
-- Un contact "Lead Data Engineer dbt" quand ppal du consultant = dbt/BigQuery
+▶ Pour kind = "contact" (contact avec fonction/titre) :
+  RÈGLES ASSOUPLIES — on cherche des contacts activables même sans stack ppal explicite dans le titre :
+  - 85-100 : fonction contient stack ppal explicite (ex: "Head of PHP", "Lead Symfony")
+  - 70-84  : fonction "tech backend/dev" ET société évoque un domaine où la stack ppal est probable
+             (ex: "Directeur technique" chez une SaaS e-commerce ou média → PHP/Symfony très probable)
+  - 55-69  : fonction "tech" générique (CTO, Dev backend senior, Lead dev) chez une société où la
+             stack ppal n'est pas exclue (secteur tech, digital, SaaS, retail, media, banque)
+  - 40-54  : fonction produit/PO/manager tech OU fonction dev mais société hors secteur pertinent
+  - <40    : fonction non-tech (marketing, RH, ventes, achats, direction non-tech)
 
-reason : 2-3 phrases FR max 50 mots. Explique CONCRÈTEMENT :
-- Quelles techs de la stack principale matchent (ou pourquoi c'est écarté)
-- Quel signal exploite le match (titre du besoin / fonction du contact / stack cliente)
+▶ Pour kind = "company_direct" (société remontée seule) :
+  - 65-80 : société dont le nom, secteur ou description évoque clairement l'usage de la stack ppal
+            (ex: agence PHP, SaaS backend, e-commerce Symfony) — bonne piste d'approche proactive
+  - 50-64 : société d'un secteur où la stack est courante (tech, digital, e-commerce, media, banque)
+            même sans mention explicite
+  - <50   : société hors périmètre
 
-Pénalise ${clientsPast} (déjà servis, score -20)
-Utilise matchedOn pour comprendre le match.`
+▶ Pour kind = "action_note" (notes/actions sur contact) :
+  - Score selon mention explicite de la stack ppal dans les notes
+  - 70+ si notes évoquent un besoin/projet backend PHP/Symfony
+  - 50-70 si notes tech backend sans stack précise
+  - <40 si notes hors sujet
+
+═══ reason ═══
+2-3 phrases FR max 50 mots. Explique CONCRÈTEMENT :
+- Quel signal exploite le match (titre du besoin / fonction du contact / secteur société / note)
+- Pourquoi c'est activable
+- Sois franc si signal faible : "signal faible mais compte à creuser"
+
+═══ Pénalités ═══
+- Consultant a déjà bossé chez ${clientsPast} → -20 au score
+- Fonction manifestement hors scope (finance, RH, achats, marketing) → score max 30`
 
   const userBase = `Consultant :
 - Rôle : ${profile.role}
-- Stack PRINCIPALE (obligatoire pour match >= 50) : ${primary}
-- Stack SECONDAIRE (accessoire) : ${secondary}
-- Secteurs : ${(profile.sectors || []).join(', ')}
+- Stack PRINCIPALE : ${primary}
+- Stack SECONDAIRE : ${secondary}
+- Secteurs déjà connus : ${(profile.sectors || []).join(', ')}
 - Séniorité : ${profile.seniority} (${profile.experience_years || '?'} ans)
 - Clients passés : ${clientsPast}
 - Résumé : ${profile.summary}`
@@ -540,6 +580,16 @@ export default async function handler(req, res) {
         if (!best) continue
         const cId = group.company?.id
         const statusInfo = cId ? (companyStatuses.get(cId) || { status: 'unknown', activeCount: 0, pastCount: 0 }) : { status: 'unknown', activeCount: 0, pastCount: 0 }
+        // Autres contacts (hors best), pour affichage dépliable côté client
+        const otherContacts = list.filter(c => c.id !== best.id).map(c => ({
+          id: c.id,
+          firstName: c.firstName,
+          lastName: c.lastName,
+          function: c.function,
+          email: c.email,
+          phone: c.phone,
+          boondUrl: `https://ui.boondmanager.com/contacts/${c.id}/information`
+        }))
         allLeadsRaw.push({
           id: `contact_${cId || best.firstName + best.lastName}`,
           kind: 'contact',
@@ -553,19 +603,68 @@ export default async function handler(req, res) {
           companyStatusLabel: statusLabel(statusInfo.status),
           companyMissions: { active: statusInfo.activeCount, past: statusInfo.pastCount },
           contact: best,
-          otherContactsCount: list.length - 1,
+          otherContacts,
+          otherContactsCount: otherContacts.length,
           matchedOn: Array.from(group.matchedOn),
           scoringPayload: {
             id: `contact_${cId || best.firstName + best.lastName}`,
             kind: 'contact',
             fullName: `${best.firstName} ${best.lastName}`,
             function: best.function,
+            allContactsInCompany: list.map(c => ({ name: `${c.firstName} ${c.lastName}`, function: c.function })).slice(0, 8),
             company: group.company?.name || '',
             companyActivity: group.company?.activityArea || '',
             companyStatus: statusInfo.status,
             matchedOn: Array.from(group.matchedOn)
           },
-          boondUrl: `https://ui.boondmanager.com/contacts/${list[0].id || ''}/information`
+          boondUrl: `https://ui.boondmanager.com/contacts/${best.id || ''}/information`
+        })
+      }
+
+      // ─── Leads company_direct : sociétés remontées via /companies (pas déjà couvertes par opp/contact) ───
+      const alreadyCoveredCompanyIds = new Set()
+      for (const l of allLeadsRaw) if (l.companyId) alreadyCoveredCompanyIds.add(String(l.companyId))
+
+      // Fetch statut pour les nouvelles sociétés
+      const directCompanyIds = scan.companiesDirect
+        .filter(c => !alreadyCoveredCompanyIds.has(String(c.row.id)))
+        .map(c => c.row.id)
+      await Promise.all(directCompanyIds.map(async id => {
+        if (!companyStatuses.has(id)) {
+          companyStatuses.set(id, await fetchCompanyStatus(apiUrl, boondHeaders, id))
+        }
+      }))
+
+      for (const cDirect of scan.companiesDirect) {
+        if (alreadyCoveredCompanyIds.has(String(cDirect.row.id))) continue
+        const a = cDirect.row.attributes || {}
+        const statusInfo = companyStatuses.get(cDirect.row.id) || { status: 'unknown', activeCount: 0, pastCount: 0 }
+        allLeadsRaw.push({
+          id: `company_${cDirect.row.id}`,
+          kind: 'company_direct',
+          sourceType: 'Société (approche proactive)',
+          title: a.name || `Société #${cDirect.row.id}`,
+          company: a.name || '',
+          companyId: cDirect.row.id,
+          companyActivity: a.activityArea || '',
+          companyTown: a.town || a.city || '',
+          companyStatus: statusInfo.status,
+          companyStatusLabel: statusLabel(statusInfo.status),
+          companyMissions: { active: statusInfo.activeCount, past: statusInfo.pastCount },
+          contact: null,
+          otherContacts: [],
+          otherContactsCount: 0,
+          matchedOn: cDirect.matchedOn,
+          scoringPayload: {
+            id: `company_${cDirect.row.id}`,
+            kind: 'company_direct',
+            company: a.name || '',
+            companyActivity: a.activityArea || '',
+            companyDescription: (a.description || '').slice(0, 300),
+            companyStatus: statusInfo.status,
+            matchedOn: cDirect.matchedOn
+          },
+          boondUrl: `https://ui.boondmanager.com/companies/${cDirect.row.id}/information`
         })
       }
 
@@ -596,12 +695,19 @@ export default async function handler(req, res) {
           keywordsComposed: profile.stack_keywords_composed || [],
           opportunitiesScanned: scan.opportunities.length,
           contactsScanned: scan.contacts.length,
+          companiesDirectScanned: scan.companiesDirect.length,
           leadsRetained: allLeads.length,
           byStatus: {
             active_client: allLeads.filter(l => l.companyStatus === 'active_client').length,
             past_client: allLeads.filter(l => l.companyStatus === 'past_client').length,
             prospect: allLeads.filter(l => l.companyStatus === 'prospect').length,
             unknown: allLeads.filter(l => l.companyStatus === 'unknown').length
+          },
+          byKind: {
+            opportunity: allLeads.filter(l => l.kind === 'opportunity').length,
+            contact: allLeads.filter(l => l.kind === 'contact').length,
+            company_direct: allLeads.filter(l => l.kind === 'company_direct').length,
+            action_note: allLeads.filter(l => l.kind === 'action_note').length
           }
         }
       })
