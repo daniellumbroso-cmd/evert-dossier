@@ -1,11 +1,11 @@
 import crypto from 'crypto'
-import formidable from 'formidable'
-import fs from 'fs'
-import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 import Anthropic from '@anthropic-ai/sdk'
 
+// bodyParser reste sur false : on lit le body JSON à la main via req.on('data')
+// pour rester compatible avec le pattern serverless Vercel actuel (le handler
+// deep_scan utilise déjà ce pattern).
 export const config = {
-  api: { bodyParser: false },
+  api: { bodyParser: false, sizeLimit: '2mb' },
   maxDuration: 300
 }
 
@@ -402,107 +402,111 @@ export default async function handler(req, res) {
 
   const contentType = req.headers['content-type'] || ''
 
-  // ═══ CAS 2 : scan profond (recharge avec profil déjà connu envoyé par le client) ═══
+  // ═══ CAS JSON : deep_scan OU pdfText déjà extrait côté navigateur ═══
+  // Depuis le fix Vercel 413, le front extrait le texte du PDF localement
+  // (pdfjs-dist) et l'envoie ici en JSON — bien plus léger que le PDF brut.
   if (contentType.includes('application/json')) {
     let body = ''
     await new Promise(r => { req.on('data', c => body += c); req.on('end', r) })
     let parsed = {}
     try { parsed = JSON.parse(body) } catch {}
 
-    const { profile, action } = parsed
-    if (action !== 'deep_scan' || !profile) {
-      return res.status(400).json({ error: 'profile + action=deep_scan requis' })
-    }
+    const { profile, action, pdfText: pdfTextJson } = parsed
 
-    try {
-      const anthropic = new Anthropic({ apiKey: anthropicKey })
-      const scan = await scanBoond(apiUrl, boondHeaders, profile, true)
+    // ─── Sous-cas A : scan profond (recharge avec profil déjà connu) ───
+    if (action === 'deep_scan' && profile) {
+      try {
+        const anthropic = new Anthropic({ apiKey: anthropicKey })
+        const scan = await scanBoond(apiUrl, boondHeaders, profile, true)
 
-      // Construction pistes actions/notes uniquement
-      const additionalLeadsRaw = []
-      for (const [contactId, actions] of scan.contactActions.entries()) {
-        const notesText = actions
-          .map(a => `[${a.type || 'note'} ${a.date || ''}] ${(a.description || a.title || '').slice(0, 300)}`)
-          .join('\n')
-        if (!notesText.trim()) continue
-        const contactRow = scan.contacts.find(c => c.row.id === contactId)
-        if (!contactRow) continue
+        // Construction pistes actions/notes uniquement
+        const additionalLeadsRaw = []
+        for (const [contactId, actions] of scan.contactActions.entries()) {
+          const notesText = actions
+            .map(a => `[${a.type || 'note'} ${a.date || ''}] ${(a.description || a.title || '').slice(0, 300)}`)
+            .join('\n')
+          if (!notesText.trim()) continue
+          const contactRow = scan.contacts.find(c => c.row.id === contactId)
+          if (!contactRow) continue
 
-        // Enrichissement du contact
-        const fullR = await boondGet(apiUrl, `/contacts/${contactId}/information`, boondHeaders)
-        const full = parseContactFull(fullR.body)
-        if (!full) continue
+          const fullR = await boondGet(apiUrl, `/contacts/${contactId}/information`, boondHeaders)
+          const full = parseContactFull(fullR.body)
+          if (!full) continue
 
-        let statusInfo = { status: 'unknown', activeCount: 0, pastCount: 0 }
-        if (full.company?.id) {
-          statusInfo = await fetchCompanyStatus(apiUrl, boondHeaders, full.company.id)
-        }
+          let statusInfo = { status: 'unknown', activeCount: 0, pastCount: 0 }
+          if (full.company?.id) {
+            statusInfo = await fetchCompanyStatus(apiUrl, boondHeaders, full.company.id)
+          }
 
-        additionalLeadsRaw.push({
-          id: `deep_action_${contactId}`,
-          kind: 'action_note',
-          sourceType: 'Note d\'action contact',
-          title: `Notes/actions sur ${full.firstName} ${full.lastName}`,
-          company: full.company?.name || '',
-          companyId: full.company?.id || null,
-          companyActivity: full.company?.activityArea || '',
-          companyTown: full.company?.town || '',
-          companyStatus: statusInfo.status,
-          companyStatusLabel: statusLabel(statusInfo.status),
-          companyMissions: { active: statusInfo.activeCount, past: statusInfo.pastCount },
-          contact: full,
-          matchedOn: contactRow.matchedOn,
-          scoringPayload: {
+          additionalLeadsRaw.push({
             id: `deep_action_${contactId}`,
             kind: 'action_note',
-            contact: `${full.firstName} ${full.lastName} — ${full.function}`,
+            sourceType: 'Note d\'action contact',
+            title: `Notes/actions sur ${full.firstName} ${full.lastName}`,
             company: full.company?.name || '',
+            companyId: full.company?.id || null,
             companyActivity: full.company?.activityArea || '',
+            companyTown: full.company?.town || '',
             companyStatus: statusInfo.status,
-            notes: notesText.slice(0, 1500),
-            matchedOn: contactRow.matchedOn
-          },
-          boondUrl: `https://ui.boondmanager.com/contacts/${contactId}/information`
+            companyStatusLabel: statusLabel(statusInfo.status),
+            companyMissions: { active: statusInfo.activeCount, past: statusInfo.pastCount },
+            contact: full,
+            matchedOn: contactRow.matchedOn,
+            scoringPayload: {
+              id: `deep_action_${contactId}`,
+              kind: 'action_note',
+              contact: `${full.firstName} ${full.lastName} — ${full.function}`,
+              company: full.company?.name || '',
+              companyActivity: full.company?.activityArea || '',
+              companyStatus: statusInfo.status,
+              notes: notesText.slice(0, 1500),
+              matchedOn: contactRow.matchedOn
+            },
+            boondUrl: `https://ui.boondmanager.com/contacts/${contactId}/information`
+          })
+        }
+
+        const scores = await scoreAllLeads(anthropic, profile, additionalLeadsRaw.map(l => l.scoringPayload))
+        const scoreMap = new Map(scores.map(s => [String(s.id), s]))
+        const additionalLeads = additionalLeadsRaw
+          .map(l => {
+            const sc = scoreMap.get(String(l.id))
+            return { ...l, score: sc?.score ?? null, reason: sc?.reason || '' }
+          })
+          .filter(l => (l.score ?? 0) >= 55)
+
+        return res.status(200).json({
+          additionalLeads,
+          count: additionalLeads.length
         })
+      } catch (e) {
+        console.error('deep_scan error', e)
+        return res.status(500).json({ error: 'Scan profond échoué : ' + e.message })
       }
-
-      const scores = await scoreAllLeads(anthropic, profile, additionalLeadsRaw.map(l => l.scoringPayload))
-      const scoreMap = new Map(scores.map(s => [String(s.id), s]))
-      const additionalLeads = additionalLeadsRaw
-        .map(l => {
-          const sc = scoreMap.get(String(l.id))
-          return { ...l, score: sc?.score ?? null, reason: sc?.reason || '' }
-        })
-        .filter(l => (l.score ?? 0) >= 55)
-
-      return res.status(200).json({
-        additionalLeads,
-        count: additionalLeads.length
-      })
-    } catch (e) {
-      console.error('deep_scan error', e)
-      return res.status(500).json({ error: 'Scan profond échoué : ' + e.message })
     }
+
+    // ─── Sous-cas B : analyse initiale depuis pdfText (extrait côté nav) ───
+    if (pdfTextJson) {
+      return runInitialAnalysis(res, apiUrl, boondHeaders, anthropicKey, pdfTextJson)
+    }
+
+    return res.status(400).json({ error: 'Body JSON invalide : attendu { pdfText } ou { profile, action:"deep_scan" }' })
   }
 
-  // ═══ CAS 1 : upload PDF → scan rapide ═══
-  const form = formidable({ maxFileSize: 15 * 1024 * 1024 })
-  form.parse(req, async (err, fields, files) => {
-    if (err) return res.status(400).json({ error: 'Erreur upload : ' + err.message })
+  // Aucun content-type reconnu
+  return res.status(400).json({ error: 'Content-Type attendu : application/json' })
+}
 
-    try {
-      const pdfFile = files.pdf?.[0]
-      let pdfText = fields.pdfText?.[0] || ''
+// Analyse initiale : à partir du texte du PDF déjà extrait côté navigateur,
+// scanne Boond et renvoie les pistes scorées.
+async function runInitialAnalysis(res, apiUrl, boondHeaders, anthropicKey, pdfText) {
+  try {
+    if (!pdfText || !pdfText.trim()) {
+      return res.status(400).json({ error: 'Aucun contenu PDF exploitable' })
+    }
 
-      if (pdfFile) {
-        const buf = fs.readFileSync(pdfFile.filepath)
-        const parsed = await pdfParse(buf)
-        pdfText = parsed.text || ''
-      }
-      if (!pdfText.trim()) return res.status(400).json({ error: 'Aucun contenu PDF exploitable' })
-
-      const anthropic = new Anthropic({ apiKey: anthropicKey })
-      const profile = await extractProfileFromPdf(anthropic, pdfText)
+    const anthropic = new Anthropic({ apiKey: anthropicKey })
+    const profile = await extractProfileFromPdf(anthropic, pdfText)
 
       if (!(profile.stack_primary?.length || profile.stack_keywords_composed?.length)) {
         return res.status(200).json({
@@ -743,5 +747,4 @@ export default async function handler(req, res) {
       console.error('boond-push-leads error', e)
       return res.status(500).json({ error: e.message || 'Erreur serveur' })
     }
-  })
 }

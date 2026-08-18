@@ -373,14 +373,44 @@ export default function MatchPage() {
     onDrop, accept: { 'application/pdf': ['.pdf'] }, maxSize: 15 * 1024 * 1024, multiple: false
   })
 
+  // Extraction texte PDF côté navigateur via pdfjs-dist
+  // Pourquoi : Vercel a une limite serverless de 4.5 MB sur le body des requêtes.
+  // Envoyer un PDF de 10 MB directement provoque une erreur 413 "Request Entity Too Large"
+  // (renvoyée en HTML par Vercel, d'où le "Unexpected token 'R' ... is not valid JSON").
+  // On extrait donc le texte localement (~qq KB), on envoie que le texte au serveur.
+  const extractPdfText = async (fileBlob) => {
+    const pdfjs = await import('pdfjs-dist/build/pdf.mjs')
+    // Worker via CDN pour éviter les soucis de bundling
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
+    const arrayBuffer = await fileBlob.arrayBuffer()
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise
+    let fullText = ''
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const content = await page.getTextContent()
+      const pageText = content.items.map(item => item.str).join(' ')
+      fullText += pageText + '\n\n'
+    }
+    return fullText.trim()
+  }
+
   const analyze = async () => {
     if (!file) return toast.error('Uploade un PDF d\'abord')
     setLoading(true)
     setProfile(null); setAllLeads([]); setCounts(null); setDisplayCount(15); setDeepScanDone(false)
     try {
-      const fd = new FormData()
-      fd.append('pdf', file)
-      const r = await fetch('/api/boond-push-leads', { method: 'POST', body: fd })
+      // 1. Extraction texte local (rapide, ~1-3 sec)
+      const pdfText = await extractPdfText(file)
+      if (!pdfText.trim()) {
+        toast.error('Impossible d\'extraire le texte du PDF (PDF image/scanné ?)')
+        return
+      }
+      // 2. Envoi JSON du texte (léger, contourne la limite Vercel)
+      const r = await fetch('/api/boond-push-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfText })
+      })
       const j = await r.json()
       if (!r.ok) { toast.error(j.error || 'Erreur'); return }
       setProfile(j.profile)

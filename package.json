@@ -14,7 +14,8 @@
     "react-dropzone": "^14.2.3",
     "react-hot-toast": "^2.4.1",
     "lucide-react": "^0.383.0",
-    "clsx": "^2.1.0"
+    "clsx": "^2.1.0",
+    "pdfjs-dist": "^4.7.76"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",
