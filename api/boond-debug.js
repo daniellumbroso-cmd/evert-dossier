@@ -85,16 +85,46 @@ export default async function handler(req, res) {
     })
   }
 
+  // Strip récursif des champs lourds (binaire base64, HTML géant, etc.)
+  // pour éviter les réponses > 4.5 MB qui font crasher Vercel en 413
+  const MAX_STR = 2000
+  const MAX_ARR = 5
+  function trim(node, depth = 0) {
+    if (depth > 6) return '[deep tree truncated]'
+    if (node === null || node === undefined) return node
+    if (typeof node === 'string') {
+      if (node.length > MAX_STR) {
+        return node.slice(0, MAX_STR) + `… [truncated, ${node.length} chars total]`
+      }
+      return node
+    }
+    if (typeof node !== 'object') return node
+    if (Array.isArray(node)) {
+      const head = node.slice(0, MAX_ARR).map(x => trim(x, depth + 1))
+      if (node.length > MAX_ARR) head.push(`… +${node.length - MAX_ARR} entrées non affichées`)
+      return head
+    }
+    const out = {}
+    for (const [k, v] of Object.entries(node)) {
+      if (/^(content|file|base64|binary|raw)$/i.test(k) && typeof v === 'string' && v.length > 500) {
+        out[k] = `[binaire ${v.length} chars — stripped]`
+        continue
+      }
+      out[k] = trim(v, depth + 1)
+    }
+    return out
+  }
+
   // Tous les sous-endpoints liés au candidat
   const endpoints = [
     `/resources/${resourceId}/information`,
     `/resources/${resourceId}/rights`,
-    `/resources/${resourceId}/positionings`,
-    `/resources/${resourceId}/deliveries`,
-    `/resources/${resourceId}/actions`,
-    `/resources/${resourceId}/documents`,
-    `/resources/${resourceId}/notes`,
-    `/resources/${resourceId}/tasks`,
+    `/resources/${resourceId}/positionings?maxResults=5`,
+    `/resources/${resourceId}/deliveries?maxResults=5`,
+    `/resources/${resourceId}/actions?maxResults=5`,
+    `/resources/${resourceId}/documents?maxResults=5`,
+    `/resources/${resourceId}/notes?maxResults=5`,
+    `/resources/${resourceId}/tasks?maxResults=5`,
     `/resources/${resourceId}/administrative`,
     `/resources/${resourceId}/cv`
   ]
@@ -103,10 +133,14 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     resourceId,
-    searchHit: searchResult?.body?.data?.find(r => String(r.id) === String(resourceId)) || null,
+    searchHit: trim(searchResult?.body?.data?.find(r => String(r.id) === String(resourceId)) || null),
     endpoints: results.reduce((acc, r) => {
-      const key = r.url.split('/').slice(-1)[0] || 'root'
-      acc[key] = { status: r.status, body: r.body, error: r.error }
+      const lastSeg = r.url.split('?')[0].split('/').slice(-1)[0] || 'root'
+      acc[lastSeg] = {
+        status: r.status,
+        body: trim(r.body),
+        error: r.error
+      }
       return acc
     }, {})
   })

@@ -4,7 +4,7 @@ import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import DossierPreview from '../components/DossierPreview'
-import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search } from 'lucide-react'
+import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search, Target } from 'lucide-react'
 
 const COMMUNITIES = ['DATA', 'Product', 'Mobile / Dev', 'Web', 'DevOps / Cloud', 'IA / ML']
 
@@ -389,6 +389,20 @@ export default function AppPage() {
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(20,0,255,0.04)'; e.currentTarget.style.color = '#1400FF' }}
               >
                 <Search size={13} /> Recherche Profils
+              </Link>
+              <Link to="/match" style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
+                color: '#1400FF', textDecoration: 'none',
+                padding: '7px 14px', borderRadius: 8,
+                border: '1.5px solid #1400FF',
+                background: 'rgba(20,0,255,0.04)',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#1400FF'; e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(20,0,255,0.04)'; e.currentTarget.style.color = '#1400FF' }}
+              >
+                <Target size={13} /> Match
               </Link>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {user.picture && (

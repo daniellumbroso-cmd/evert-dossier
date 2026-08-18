@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import AppPage from './pages/AppPage'
 import SearchPage from './pages/SearchPage'
 import DebugBoondPage from './pages/DebugBoondPage'
+import MatchPage from './pages/MatchPage'
 import ProtectedRoute from './components/ProtectedRoute'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -45,6 +46,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/debug-boond" element={
           <ProtectedRoute>
             <DebugBoondPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/match" element={
+          <ProtectedRoute>
+            <MatchPage />
           </ProtectedRoute>
         } />
       </Routes>
