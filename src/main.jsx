@@ -8,6 +8,7 @@ import AppPage from './pages/AppPage'
 import SearchPage from './pages/SearchPage'
 import DebugBoondPage from './pages/DebugBoondPage'
 import MatchPage from './pages/MatchPage'
+import PushPage from './pages/PushPage'
 import ProtectedRoute from './components/ProtectedRoute'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -51,6 +52,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/match" element={
           <ProtectedRoute>
             <MatchPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/push" element={
+          <ProtectedRoute>
+            <PushPage />
           </ProtectedRoute>
         } />
       </Routes>
