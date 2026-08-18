@@ -243,6 +243,20 @@ async function scoreAllLeads(anthropic, profile, leads) {
   const clientsPast = (profile.clients_past || []).join(', ') || 'aucun'
   const primary = (profile.stack_primary || []).join(', ')
   const secondary = (profile.stack_secondary || []).join(', ')
+  const role = profile.role || ''
+
+  // Détection du "métier" du candidat pour savoir quels titres de contact sont pertinents
+  const isProduct = /product|po\b|pm\b|product owner|product manager|product lead/i.test(role)
+  const isData = /data|analytics|bi|business intelligence/i.test(role)
+  const isDev = /developp|dev\b|backend|frontend|full[- ]?stack|tech lead|lead dev|architect|engineer|ing[eé]nieur/i.test(role)
+  const isDesign = /design|ux|ui\b/i.test(role)
+
+  const metierGuidance = []
+  if (isDev) metierGuidance.push('- DEV BACKEND/FULLSTACK : accepter uniquement CTO, VP Engineering, Head of Engineering / Backend / Platform, Tech Lead, Lead Dev, Architecte, Développeur/Ingénieur (avec mention stack ppal proche)')
+  if (isData) metierGuidance.push('- DATA : accepter Head of Data, Chief Data Officer, Data Engineer Lead, Analytics Lead')
+  if (isProduct) metierGuidance.push('- PRODUCT : accepter CPO, Head of Product, Product Lead, Senior PM/PO')
+  if (isDesign) metierGuidance.push('- DESIGN : accepter Head of Design, Design Lead, UX Lead')
+  if (!metierGuidance.length) metierGuidance.push('- Aligner strictement la fonction du contact au métier du candidat')
 
   const system = `Tu évalues la pertinence de pistes business pour PUSHER un consultant chez un client.
 Réponds UNIQUEMENT par un tableau JSON, sans markdown.
@@ -250,54 +264,65 @@ Réponds UNIQUEMENT par un tableau JSON, sans markdown.
 Format : [{ "id": "...", "score": 85, "reason": "..." }]
 
 Consultant :
+- Rôle : ${role}
 - Stack PRINCIPALE : ${primary}
-- Stack SECONDAIRE (accessoires) : ${secondary}
+- Stack SECONDAIRE (accessoires seuls insuffisants) : ${secondary}
 
-═══ RÈGLES DE SCORING (différentes selon le TYPE de piste : kind) ═══
+═══ SEUIL : les pistes en dessous de 55 seront écartées. Sois strict. ═══
 
 ▶ Pour kind = "opportunity" (BESOIN Boond) :
-  RÈGLE STRICTE : score >= 50 UNIQUEMENT si stack PRINCIPALE présente dans le besoin.
-  - 85-100 : stack ppal explicite + contexte pertinent
+  RÈGLE STRICTE : score >= 55 UNIQUEMENT si stack PRINCIPALE présente dans le besoin.
+  - 85-100 : stack ppal explicite + contexte pertinent (séniorité, secteur)
   - 70-84  : stack ppal bien alignée
-  - 55-69  : stack ppal partielle
-  - 40-54  : signal faible (que du secondaire, ppal évoquée en passant)
-  - <40    : à écarter (ex: besoin Node.js + RabbitMQ pour un consultant PHP/Symfony)
+  - 55-69  : stack ppal présente mais contexte moins clair
+  - <55    : stack ppal absente OU juste évoquée en passant → écarter
+  Exemple à ÉCARTER : besoin "Développeur Node.js RabbitMQ" pour un consultant PHP/Symfony
+  (juste RabbitMQ en commun, ce n'est pas suffisant).
 
 ▶ Pour kind = "contact" (contact avec fonction/titre) :
-  RÈGLES ASSOUPLIES — on cherche des contacts activables même sans stack ppal explicite dans le titre :
-  - 85-100 : fonction contient stack ppal explicite (ex: "Head of PHP", "Lead Symfony")
-  - 70-84  : fonction "tech backend/dev" ET société évoque un domaine où la stack ppal est probable
-             (ex: "Directeur technique" chez une SaaS e-commerce ou média → PHP/Symfony très probable)
-  - 55-69  : fonction "tech" générique (CTO, Dev backend senior, Lead dev) chez une société où la
-             stack ppal n'est pas exclue (secteur tech, digital, SaaS, retail, media, banque)
-  - 40-54  : fonction produit/PO/manager tech OU fonction dev mais société hors secteur pertinent
-  - <40    : fonction non-tech (marketing, RH, ventes, achats, direction non-tech)
+  Score >= 55 SEULEMENT SI l'un de ces critères est rempli :
+  (A) La fonction contient EXPLICITEMENT la stack ppal
+      → "Head of PHP", "Lead Symfony", "Développeur Symfony" → score 80-95
+  (B) La fonction est un DÉCIDEUR ou OPÉRATIONNEL TECH aligné au métier du candidat,
+      ET on a une preuve tangible que la société utilise la stack (dans le nom de la société,
+      son secteur explicite, sa description, ou dans les notes fournies)
+      → score 65-80
+  (C) La fonction est PRÉCISÉMENT alignée au métier du candidat
+      (voir guidance métier ci-dessous) chez une société explicitement tech
+      → score 55-65
+  Fonctions guidance selon métier du candidat :
+${metierGuidance.join('\n')}
+
+  À ÉCARTER (score < 40) — même si société tech :
+  - Product Lead, Product Manager, Product Owner, Chief Product Officer, Directeur Produit,
+    Head of Product, Directeur Digital → sauf si candidat est LUI-MÊME product/PO/PM
+  - Marketing, RH, Sales, Finance, Achats, Direction non-tech
+  - CTO / Head of Engineering d'une société SANS aucun signal d'usage de la stack
+    (ex: cabinet de conseil généraliste, entreprise industrielle traditionnelle sans mention tech)
 
 ▶ Pour kind = "company_direct" (société remontée seule) :
-  - 65-80 : société dont le nom, secteur ou description évoque clairement l'usage de la stack ppal
-            (ex: agence PHP, SaaS backend, e-commerce Symfony) — bonne piste d'approche proactive
-  - 50-64 : société d'un secteur où la stack est courante (tech, digital, e-commerce, media, banque)
-            même sans mention explicite
-  - <50   : société hors périmètre
+  - 65-80 : nom / secteur / description évoquent CLAIREMENT l'usage de la stack ppal
+            (agence PHP, éditeur SaaS Symfony, e-commerce PHP)
+  - 55-64 : société d'un secteur où la stack est très courante ET on a un signal explicite
+  - <55   : simple présomption "secteur non exclu" → écarter
 
-▶ Pour kind = "action_note" (notes/actions sur contact) :
-  - Score selon mention explicite de la stack ppal dans les notes
-  - 70+ si notes évoquent un besoin/projet backend PHP/Symfony
-  - 50-70 si notes tech backend sans stack précise
-  - <40 si notes hors sujet
+▶ Pour kind = "action_note" :
+  - 70+ : note explicite mentionnant besoin/projet stack ppal
+  - 55-69 : note tech backend/produit selon métier avec signal fort
+  - <55 : notes vagues → écarter
 
 ═══ reason ═══
 2-3 phrases FR max 50 mots. Explique CONCRÈTEMENT :
-- Quel signal exploite le match (titre du besoin / fonction du contact / secteur société / note)
-- Pourquoi c'est activable
-- Sois franc si signal faible : "signal faible mais compte à creuser"
+- Quelle preuve concrète justifie le match (JAMAIS "compte à creuser" seul)
+- Si signal faible ou tiré par les cheveux, mets score bas et dis-le franchement
 
 ═══ Pénalités ═══
-- Consultant a déjà bossé chez ${clientsPast} → -20 au score
-- Fonction manifestement hors scope (finance, RH, achats, marketing) → score max 30`
+- Consultant a déjà bossé chez ${clientsPast} → -20
+- Fonction hors scope métier → score max 30
+- "Signal société vague, non explicite" → score max 50 (donc écarté)`
 
   const userBase = `Consultant :
-- Rôle : ${profile.role}
+- Rôle : ${role}
 - Stack PRINCIPALE : ${primary}
 - Stack SECONDAIRE : ${secondary}
 - Secteurs déjà connus : ${(profile.sectors || []).join(', ')}
@@ -448,7 +473,7 @@ export default async function handler(req, res) {
           const sc = scoreMap.get(String(l.id))
           return { ...l, score: sc?.score ?? null, reason: sc?.reason || '' }
         })
-        .filter(l => (l.score ?? 0) >= 50)
+        .filter(l => (l.score ?? 0) >= 55)
 
       return res.status(200).json({
         additionalLeads,
@@ -681,7 +706,7 @@ export default async function handler(req, res) {
           const sc = scoreMap.get(String(l.id))
           return { ...l, score: sc?.score ?? null, reason: sc?.reason || '' }
         })
-        .filter(l => (l.score ?? 0) >= 50)
+        .filter(l => (l.score ?? 0) >= 55)
         .sort((a, b) => {
           const sa = STATUS_ORDER[a.companyStatus] ?? 3
           const sb = STATUS_ORDER[b.companyStatus] ?? 3
