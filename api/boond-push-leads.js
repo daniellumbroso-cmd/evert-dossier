@@ -49,7 +49,8 @@ Format :
   "firstName": "Alexandre",
   "lastName": "Hunault",
   "role": "Développeur Back-end Senior PHP / Symfony",
-  "stack_keywords_simple": ["PHP", "Symfony", "API Platform", "PostgreSQL"],
+  "stack_primary": ["PHP", "Symfony"],
+  "stack_secondary": ["API Platform", "PostgreSQL", "RabbitMQ", "Redis"],
   "stack_keywords_composed": ["PHP Symfony", "API Platform Symfony", "Symfony backend senior"],
   "sectors": ["presse/média", "SaaS anti-fraude"],
   "clients_past": ["Le Monde", "Bayard"],
@@ -58,10 +59,13 @@ Format :
   "summary": "1-2 phrases synthèse"
 }
 
-Règles :
-- stack_keywords_simple : 3-5 mots UNIQUES très distinctifs (pas "Git", "REST", "Agile")
-- stack_keywords_composed : 3-5 combinaisons de 2-3 mots
-- Ordre du plus au moins distinctif
+Règles critiques :
+- stack_primary : 2 à 3 technologies EXCLUSIVEMENT — le CŒUR du profil, celles sans lesquelles le consultant N'EST PAS pertinent pour un besoin.
+  Exemple : un dev PHP/Symfony → stack_primary = ["PHP", "Symfony"]. Pas "RabbitMQ" même s'il l'utilise, car un besoin RabbitMQ Node.js n'est PAS pour lui.
+  Exemple : un data engineer dbt/BigQuery → stack_primary = ["dbt", "BigQuery"].
+- stack_secondary : les technos qu'il maîtrise mais qui sont accessoires (bibliothèques, outils, adjacent skills). NE SUFFISENT PAS SEULES pour justifier un match.
+- stack_keywords_composed : 3-5 combinaisons de mots de la stack primaire principalement, pour rechercher précisément dans Boond.
+- Pas de "Git", "REST", "Agile", "CI/CD" (trop généraux, jamais dans les stacks)
 - Pas d'invention`
 
   const r = await anthropic.messages.create({
@@ -72,17 +76,27 @@ Règles :
   })
   const raw = r.content?.[0]?.text || '{}'
   const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
-  try { return JSON.parse(clean) }
-  catch { return { firstName: '', lastName: '', role: '', stack_keywords_simple: [], stack_keywords_composed: [], sectors: [], clients_past: [], seniority: '', experience_years: 0, summary: '' } }
+  try {
+    const p = JSON.parse(clean)
+    // Rétro-compat : si l'ancien format était renvoyé, on migre
+    if (!p.stack_primary && p.stack_keywords_simple) {
+      p.stack_primary = p.stack_keywords_simple.slice(0, 2)
+      p.stack_secondary = p.stack_keywords_simple.slice(2)
+    }
+    return p
+  }
+  catch { return { firstName: '', lastName: '', role: '', stack_primary: [], stack_secondary: [], stack_keywords_composed: [], sectors: [], clients_past: [], seniority: '', experience_years: 0, summary: '' } }
 }
 
 async function scanBoond(apiUrl, headers, profile, deep = false) {
-  const simple = (profile.stack_keywords_simple || []).slice(0, 4)
+  const primary = (profile.stack_primary || []).slice(0, 3)
+  const secondary = (profile.stack_secondary || []).slice(0, 3)
   const composed = (profile.stack_keywords_composed || []).slice(0, 4)
 
   const oppMap = new Map()
   const contactMap = new Map()
 
+  // A) composés sur /opportunities
   for (const kw of composed) {
     const qs = new URLSearchParams({ keywords: kw, maxResults: '20', page: '1' })
     const r = await boondGet(apiUrl, `/opportunities?${qs}`, headers)
@@ -92,8 +106,9 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
       oppMap.set(row.id, ex)
     }
   }
-  for (const kw of simple) {
-    const qs = new URLSearchParams({ keywords: kw, maxResults: '15', page: '1' })
+  // B) primaires sur /opportunities
+  for (const kw of primary) {
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '20', page: '1' })
     const r = await boondGet(apiUrl, `/opportunities?${qs}`, headers)
     for (const row of (r.body?.data || [])) {
       const ex = oppMap.get(row.id) || { row, matchedOn: [] }
@@ -101,12 +116,14 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
       oppMap.set(row.id, ex)
     }
   }
-  for (const kw of simple) {
-    const qs = new URLSearchParams({ keywords: kw, maxResults: '20', page: '1' })
+  // C) primaires ET secondaires sur /contacts (matche fonctions/titres)
+  const contactKeywords = [...primary, ...secondary]
+  for (const kw of contactKeywords) {
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '25', page: '1' })
     const r = await boondGet(apiUrl, `/contacts?${qs}`, headers)
     for (const row of (r.body?.data || [])) {
       const ex = contactMap.get(row.id) || { row, matchedOn: [] }
-      ex.matchedOn.push(kw)
+      if (!ex.matchedOn.includes(kw)) ex.matchedOn.push(kw)
       contactMap.set(row.id, ex)
     }
   }
@@ -204,26 +221,44 @@ async function scoreAllLeads(anthropic, profile, leads) {
   for (let i = 0; i < leads.length; i += BATCH_SIZE) batches.push(leads.slice(i, i + BATCH_SIZE))
 
   const clientsPast = (profile.clients_past || []).join(', ') || 'aucun'
-  const system = `Tu évalues la pertinence de pistes business pour PUSHER un consultant.
+  const primary = (profile.stack_primary || []).join(', ')
+  const secondary = (profile.stack_secondary || []).join(', ')
+
+  const system = `Tu évalues la pertinence de pistes business pour PUSHER un consultant chez un client.
 Réponds UNIQUEMENT par un tableau JSON, sans markdown.
 
 Format : [{ "id": "...", "score": 85, "reason": "..." }]
 
-Règles :
-- score entier 0-100
-  * 80+ = stack très alignée + contexte pertinent
-  * 60-79 = match stack clair
-  * 40-59 = match partiel intéressant
-  * 30-39 = signal faible mais gardé pour tri manuel
-  * <30 = à écarter
-- reason : 2-3 phrases FR max 50 mots, concret (quelle techno, quel signal, pourquoi)
-- Pénalise ${clientsPast} (déjà servis)
-- Utilise matchedOn pour comprendre le match
-- Généreux 30-60, critique 60+`
+RÈGLE ABSOLUE — Ne JAMAIS mettre un score >= 50 si la stack PRINCIPALE du consultant n'est PAS présente dans la piste.
+- Stack PRINCIPALE du consultant : ${primary}
+- Stack SECONDAIRE (accessoires, ne SUFFISENT PAS SEULES) : ${secondary}
+
+Grille de score :
+- 85-100 : stack principale ENTIÈREMENT alignée + contexte pertinent (besoin actif OU contact CTO/Lead/Head sur cette stack)
+- 70-84  : stack principale bien alignée, contexte à creuser
+- 55-69  : stack principale partiellement présente (au moins 1 mot de la ppal + du secondaire)
+- 40-54  : signal faible : SEULEMENT du secondaire, OU stack ppal évoquée en passant. À écarter dans la plupart des cas.
+- < 40   : aucun match sur la stack ppal. À écarter.
+
+Cas type à ÉCARTER (score < 40) :
+- Besoin "Développeur Node.js RabbitMQ" alors que la stack ppal du consultant est PHP/Symfony (juste RabbitMQ commun)
+- Besoin "Architecte Java PostgreSQL" alors que ppal = PHP (juste PostgreSQL commun)
+
+Cas type CONTACT à valoriser (score 70+) :
+- Un contact avec fonction "Head of Backend PHP" ou "CTO Symfony" → bon score même sans besoin actif
+- Un contact "Lead Data Engineer dbt" quand ppal du consultant = dbt/BigQuery
+
+reason : 2-3 phrases FR max 50 mots. Explique CONCRÈTEMENT :
+- Quelles techs de la stack principale matchent (ou pourquoi c'est écarté)
+- Quel signal exploite le match (titre du besoin / fonction du contact / stack cliente)
+
+Pénalise ${clientsPast} (déjà servis, score -20)
+Utilise matchedOn pour comprendre le match.`
 
   const userBase = `Consultant :
 - Rôle : ${profile.role}
-- Stack : ${(profile.stack_keywords_simple || []).join(', ')}
+- Stack PRINCIPALE (obligatoire pour match >= 50) : ${primary}
+- Stack SECONDAIRE (accessoire) : ${secondary}
 - Secteurs : ${(profile.sectors || []).join(', ')}
 - Séniorité : ${profile.seniority} (${profile.experience_years || '?'} ans)
 - Clients passés : ${clientsPast}
@@ -246,15 +281,19 @@ Règles :
   return all
 }
 
-function pickBestContact(contacts, stackWords) {
+function pickBestContact(contacts, profile) {
   if (!contacts.length) return null
-  const lowerStack = stackWords.map(s => s.toLowerCase()).filter(Boolean)
+  const primary = (profile.stack_primary || []).map(s => s.toLowerCase()).filter(Boolean)
+  const secondary = (profile.stack_secondary || []).map(s => s.toLowerCase()).filter(Boolean)
   const withScore = contacts.map(c => {
     const fn = (c.function || '').toLowerCase()
     let s = 0
-    for (const w of lowerStack) if (w && fn.includes(w)) s += 10
-    if (/cto|vp|head|lead|principal|director technique|responsable tech/i.test(fn)) s += 5
-    if (/manager|senior/i.test(fn)) s += 2
+    // Bonus x3 pour matcher un mot de la stack principale dans la fonction
+    for (const w of primary) if (w && fn.includes(w)) s += 30
+    // Bonus modéré pour un mot secondaire
+    for (const w of secondary) if (w && fn.includes(w)) s += 8
+    if (/cto|vp|head|lead|principal|director technique|responsable tech/i.test(fn)) s += 10
+    if (/manager|senior/i.test(fn)) s += 4
     return { c, s }
   })
   withScore.sort((a, b) => b.s - a.s)
@@ -368,7 +407,7 @@ export default async function handler(req, res) {
           const sc = scoreMap.get(String(l.id))
           return { ...l, score: sc?.score ?? null, reason: sc?.reason || '' }
         })
-        .filter(l => (l.score ?? 0) >= 30)
+        .filter(l => (l.score ?? 0) >= 50)
 
       return res.status(200).json({
         additionalLeads,
@@ -399,7 +438,7 @@ export default async function handler(req, res) {
       const anthropic = new Anthropic({ apiKey: anthropicKey })
       const profile = await extractProfileFromPdf(anthropic, pdfText)
 
-      if (!(profile.stack_keywords_simple?.length || profile.stack_keywords_composed?.length)) {
+      if (!(profile.stack_primary?.length || profile.stack_keywords_composed?.length)) {
         return res.status(200).json({
           profile, leads: [],
           warning: 'Aucun keyword stack extrait du PDF.'
@@ -495,14 +534,9 @@ export default async function handler(req, res) {
         companyStatuses.set(id, await fetchCompanyStatus(apiUrl, boondHeaders, id))
       }))
 
-      const stackWords = [
-        ...(profile.stack_keywords_simple || []),
-        ...(profile.stack_keywords_composed || []).flatMap(k => k.split(' '))
-      ]
-
       for (const [, group] of contactsByCompany.entries()) {
         const list = group.contacts.map(x => x.full)
-        const best = pickBestContact(list, stackWords)
+        const best = pickBestContact(list, profile)
         if (!best) continue
         const cId = group.company?.id
         const statusInfo = cId ? (companyStatuses.get(cId) || { status: 'unknown', activeCount: 0, pastCount: 0 }) : { status: 'unknown', activeCount: 0, pastCount: 0 }
@@ -545,7 +579,7 @@ export default async function handler(req, res) {
           const sc = scoreMap.get(String(l.id))
           return { ...l, score: sc?.score ?? null, reason: sc?.reason || '' }
         })
-        .filter(l => (l.score ?? 0) >= 30)
+        .filter(l => (l.score ?? 0) >= 50)
         .sort((a, b) => {
           const sa = STATUS_ORDER[a.companyStatus] ?? 3
           const sb = STATUS_ORDER[b.companyStatus] ?? 3
@@ -557,7 +591,8 @@ export default async function handler(req, res) {
         profile,
         leads: allLeads,
         counts: {
-          keywordsSimple: profile.stack_keywords_simple || [],
+          keywordsPrimary: profile.stack_primary || [],
+          keywordsSecondary: profile.stack_secondary || [],
           keywordsComposed: profile.stack_keywords_composed || [],
           opportunitiesScanned: scan.opportunities.length,
           contactsScanned: scan.contacts.length,

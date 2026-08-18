@@ -487,7 +487,14 @@ export default function PushPage() {
                 <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{profile.role}</div>
               )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                {(profile.stack_keywords_simple || []).map(k => (
+                {(profile.stack_primary || []).map(k => (
+                  <span key={k} style={{
+                    fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
+                    padding: '3px 10px', borderRadius: 10,
+                    background: '#1400FF', color: '#fff'
+                  }}>{k}</span>
+                ))}
+                {(profile.stack_secondary || []).map(k => (
                   <span key={k} style={{
                     fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 500,
                     padding: '3px 9px', borderRadius: 10,
