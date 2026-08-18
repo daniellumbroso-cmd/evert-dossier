@@ -97,9 +97,9 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
   const contactMap = new Map()
   const companyMap = new Map()  // Sociétés remontées via /companies (pas via contact ni opp)
 
-  // A) composés sur /opportunities
+  // A) composés sur /opportunities (précision)
   for (const kw of composed) {
-    const qs = new URLSearchParams({ keywords: kw, maxResults: '20', page: '1' })
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '40', page: '1' })
     const r = await boondGet(apiUrl, `/opportunities?${qs}`, headers)
     for (const row of (r.body?.data || [])) {
       const ex = oppMap.get(row.id) || { row, matchedOn: [] }
@@ -107,9 +107,9 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
       oppMap.set(row.id, ex)
     }
   }
-  // B) primaires sur /opportunities
+  // B) primaires sur /opportunities (recall)
   for (const kw of primary) {
-    const qs = new URLSearchParams({ keywords: kw, maxResults: '20', page: '1' })
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '30', page: '1' })
     const r = await boondGet(apiUrl, `/opportunities?${qs}`, headers)
     for (const row of (r.body?.data || [])) {
       const ex = oppMap.get(row.id) || { row, matchedOn: [] }
@@ -117,9 +117,9 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
       oppMap.set(row.id, ex)
     }
   }
-  // C) PAGINATION sur /contacts : primaires + secondaires, 5 pages max de 30 chacune = 150/keyword
+  // C) PAGINATION sur /contacts : primaires + secondaires, 10 pages max de 30 chacune = 300/keyword
   const contactKeywords = [...primary, ...secondary]
-  const CONTACT_PAGES = 5
+  const CONTACT_PAGES = 10
   const CONTACT_PAGE_SIZE = 30
   for (const kw of contactKeywords) {
     for (let page = 1; page <= CONTACT_PAGES; page++) {
@@ -131,13 +131,12 @@ async function scanBoond(apiUrl, headers, profile, deep = false) {
         if (!ex.matchedOn.includes(kw)) ex.matchedOn.push(kw)
         contactMap.set(row.id, ex)
       }
-      // Arrêt si moins d'une page pleine ou aucun résultat → plus rien à récupérer
       if (rows.length < CONTACT_PAGE_SIZE) break
     }
   }
   // D) /companies sur primaires + composés : capture les sociétés dont nom/desc matche
   for (const kw of [...primary, ...composed]) {
-    const qs = new URLSearchParams({ keywords: kw, maxResults: '15', page: '1' })
+    const qs = new URLSearchParams({ keywords: kw, maxResults: '30', page: '1' })
     const r = await boondGet(apiUrl, `/companies?${qs}`, headers)
     for (const row of (r.body?.data || [])) {
       const ex = companyMap.get(row.id) || { row, matchedOn: [] }
@@ -248,14 +247,33 @@ async function scoreAllLeads(anthropic, profile, leads) {
   // Détection du "métier" du candidat pour savoir quels titres de contact sont pertinents
   const isProduct = /product|po\b|pm\b|product owner|product manager|product lead/i.test(role)
   const isData = /data|analytics|bi|business intelligence/i.test(role)
-  const isDev = /developp|dev\b|backend|frontend|full[- ]?stack|tech lead|lead dev|architect|engineer|ing[eé]nieur/i.test(role)
+  const isDevOps = /devops|sre|site reliability|cloud|infra|platform|kubernetes|terraform/i.test(role)
+  const isDev = /developp|dev\b|backend|frontend|full[- ]?stack|tech lead|lead dev|architect|engineer|ing[eé]nieur|mobile|ios|android/i.test(role) && !isDevOps
   const isDesign = /design|ux|ui\b/i.test(role)
 
   const metierGuidance = []
-  if (isDev) metierGuidance.push('- DEV BACKEND/FULLSTACK : accepter uniquement CTO, VP Engineering, Head of Engineering / Backend / Platform, Tech Lead, Lead Dev, Architecte, Développeur/Ingénieur (avec mention stack ppal proche)')
-  if (isData) metierGuidance.push('- DATA : accepter Head of Data, Chief Data Officer, Data Engineer Lead, Analytics Lead')
-  if (isProduct) metierGuidance.push('- PRODUCT : accepter CPO, Head of Product, Product Lead, Senior PM/PO')
-  if (isDesign) metierGuidance.push('- DESIGN : accepter Head of Design, Design Lead, UX Lead')
+  const acceptableGenericTitles = []
+
+  if (isDevOps) {
+    metierGuidance.push('- DEVOPS/CLOUD : accepter CTO, VP Engineering, Head of Engineering / Infrastructure / Cloud / Platform / DevOps, Cloud Architect, Site Reliability Engineer (SRE), Platform Engineer, DevOps Engineer, Infrastructure Lead, Directeur Technique — MÊME SANS mention outil spécifique dans le titre')
+    acceptableGenericTitles.push('CTO', 'VP Engineering', 'Head of Engineering', 'Head of Infrastructure', 'Head of Cloud', 'Head of Platform', 'Head of DevOps', 'Cloud Architect', 'SRE', 'Site Reliability Engineer', 'Platform Engineer', 'DevOps Engineer', 'Infrastructure Lead', 'Directeur Technique', 'Responsable Infrastructure')
+  }
+  if (isDev) {
+    metierGuidance.push('- DEV BACKEND/FULLSTACK/MOBILE : accepter uniquement CTO, VP Engineering, Head of Engineering / Backend / Mobile / Platform, Tech Lead, Lead Dev, Architecte, Développeur/Ingénieur (avec mention stack ppal proche)')
+    acceptableGenericTitles.push('CTO', 'VP Engineering', 'Head of Engineering', 'Head of Backend', 'Head of Mobile', 'Tech Lead', 'Lead Dev', 'Architecte Logiciel')
+  }
+  if (isData) {
+    metierGuidance.push('- DATA : accepter Head of Data, Chief Data Officer, Data Engineer Lead, Analytics Lead, Data Platform Lead')
+    acceptableGenericTitles.push('Head of Data', 'CDO', 'Chief Data Officer', 'Data Engineer Lead', 'Analytics Lead')
+  }
+  if (isProduct) {
+    metierGuidance.push('- PRODUCT : accepter CPO, Head of Product, Product Lead, Senior PM/PO, Directeur Produit')
+    acceptableGenericTitles.push('CPO', 'Chief Product Officer', 'Head of Product', 'Product Lead', 'Senior Product Manager')
+  }
+  if (isDesign) {
+    metierGuidance.push('- DESIGN : accepter Head of Design, Design Lead, UX Lead, Chief Design Officer')
+    acceptableGenericTitles.push('Head of Design', 'Design Lead', 'UX Lead')
+  }
   if (!metierGuidance.length) metierGuidance.push('- Aligner strictement la fonction du contact au métier du candidat')
 
   const system = `Tu évalues la pertinence de pistes business pour PUSHER un consultant chez un client.
@@ -268,58 +286,55 @@ Consultant :
 - Stack PRINCIPALE : ${primary}
 - Stack SECONDAIRE (accessoires seuls insuffisants) : ${secondary}
 
-═══ SEUIL : les pistes en dessous de 55 seront écartées. Sois strict. ═══
+═══ SEUIL : les pistes en dessous de 55 seront écartées. Sois strict mais pas obtus. ═══
 
 ▶ Pour kind = "opportunity" (BESOIN Boond) :
   RÈGLE STRICTE : score >= 55 UNIQUEMENT si stack PRINCIPALE présente dans le besoin.
-  - 85-100 : stack ppal explicite + contexte pertinent (séniorité, secteur)
+  - 85-100 : stack ppal explicite + contexte pertinent
   - 70-84  : stack ppal bien alignée
-  - 55-69  : stack ppal présente mais contexte moins clair
-  - <55    : stack ppal absente OU juste évoquée en passant → écarter
-  Exemple à ÉCARTER : besoin "Développeur Node.js RabbitMQ" pour un consultant PHP/Symfony
-  (juste RabbitMQ en commun, ce n'est pas suffisant).
+  - 55-69  : stack ppal présente
+  - <55    : stack ppal absente → écarter
 
 ▶ Pour kind = "contact" (contact avec fonction/titre) :
-  Score >= 55 SEULEMENT SI l'un de ces critères est rempli :
-  (A) La fonction contient EXPLICITEMENT la stack ppal
-      → "Head of PHP", "Lead Symfony", "Développeur Symfony" → score 80-95
-  (B) La fonction est un DÉCIDEUR ou OPÉRATIONNEL TECH aligné au métier du candidat,
-      ET on a une preuve tangible que la société utilise la stack (dans le nom de la société,
-      son secteur explicite, sa description, ou dans les notes fournies)
-      → score 65-80
-  (C) La fonction est PRÉCISÉMENT alignée au métier du candidat
-      (voir guidance métier ci-dessous) chez une société explicitement tech
-      → score 55-65
-  Fonctions guidance selon métier du candidat :
+  Score >= 55 SI l'un de ces critères est rempli :
+  (A) La fonction contient EXPLICITEMENT la stack ppal ou un synonyme direct
+      → "Head of PHP", "Cloud Architect GCP", "SRE Terraform" → score 85-95
+  (B) La fonction est un TITRE GÉNÉRIQUE ACCEPTABLE POUR LE MÉTIER du candidat
+      (voir liste ci-dessous) — MÊME SANS outil spécifique dans le titre
+      → score 65-80 si société tech / SaaS / éditeur / scale-up
+      → score 55-64 si société type "grand groupe / bancaire / industrie" sans mention tech
+  (C) La fonction contient un SYNONYME du métier (ex: "Cloud Engineer" pour un DevOps GCP)
+      → score 60-75
+
+  TITRES GÉNÉRIQUES ACCEPTABLES POUR CE MÉTIER (score >= 55 même sans outil) :
+${acceptableGenericTitles.length ? acceptableGenericTitles.map(t => `    · ${t}`).join('\n') : '    (aucun défini)'}
+
+  Guidance métier :
 ${metierGuidance.join('\n')}
 
   À ÉCARTER (score < 40) — même si société tech :
-  - Product Lead, Product Manager, Product Owner, Chief Product Officer, Directeur Produit,
-    Head of Product, Directeur Digital → sauf si candidat est LUI-MÊME product/PO/PM
+  - Product/PM/PO/CPO → SAUF si candidat est LUI-MÊME product (voir métier ci-dessus)
   - Marketing, RH, Sales, Finance, Achats, Direction non-tech
-  - CTO / Head of Engineering d'une société SANS aucun signal d'usage de la stack
-    (ex: cabinet de conseil généraliste, entreprise industrielle traditionnelle sans mention tech)
+  - Fonctions vagues type "Consultant", "Chef de projet" sans mention tech précise
 
 ▶ Pour kind = "company_direct" (société remontée seule) :
   - 65-80 : nom / secteur / description évoquent CLAIREMENT l'usage de la stack ppal
-            (agence PHP, éditeur SaaS Symfony, e-commerce PHP)
-  - 55-64 : société d'un secteur où la stack est très courante ET on a un signal explicite
-  - <55   : simple présomption "secteur non exclu" → écarter
+  - 55-64 : société tech où la stack est très courante ET signal explicite
+  - <55   : simple présomption → écarter
 
 ▶ Pour kind = "action_note" :
   - 70+ : note explicite mentionnant besoin/projet stack ppal
-  - 55-69 : note tech backend/produit selon métier avec signal fort
+  - 55-69 : note tech pertinente selon métier
   - <55 : notes vagues → écarter
 
 ═══ reason ═══
 2-3 phrases FR max 50 mots. Explique CONCRÈTEMENT :
 - Quelle preuve concrète justifie le match (JAMAIS "compte à creuser" seul)
-- Si signal faible ou tiré par les cheveux, mets score bas et dis-le franchement
+- Pour un titre générique accepté, précise pourquoi c'est pertinent pour le métier
 
 ═══ Pénalités ═══
 - Consultant a déjà bossé chez ${clientsPast} → -20
-- Fonction hors scope métier → score max 30
-- "Signal société vague, non explicite" → score max 50 (donc écarté)`
+- Fonction hors scope métier → score max 30`
 
   const userBase = `Consultant :
 - Rôle : ${role}
