@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
@@ -6,10 +6,10 @@ import { useAuth } from '../hooks/useAuth'
 import {
   ArrowLeft, LogOut, Loader2, Upload, FileText, Send,
   ExternalLink, Mail, Linkedin, Copy, X, Phone, User, Search,
-  Briefcase, MessageSquare, ChevronDown, Zap
+  Briefcase, MessageSquare, ChevronDown, Zap, Building2, MapPin
 } from 'lucide-react'
 
-// ─── Composants utilitaires ────────────────────────────────
+// ─── Utils ────
 function ScoreBadge({ score }) {
   if (score == null) return null
   const color = score >= 80 ? '#1400FF' : score >= 60 ? '#5b3df5' : score >= 45 ? '#7c6ff0' : '#999'
@@ -22,6 +22,32 @@ function ScoreBadge({ score }) {
       fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 13, color,
       flexShrink: 0
     }}>{score}</div>
+  )
+}
+
+function StatusPill({ status, label, missions }) {
+  const conf = {
+    active_client: { color: '#1d8b4f', bg: 'rgba(40,180,99,0.12)', icon: '🟢' },
+    past_client: { color: '#1e5db3', bg: 'rgba(30,93,179,0.12)', icon: '🔵' },
+    prospect: { color: '#b57a00', bg: 'rgba(255,170,0,0.12)', icon: '🟠' },
+    unknown: { color: '#888', bg: '#f0f0f5', icon: '⚪' }
+  }[status] || { color: '#555', bg: '#f0f0f5', icon: '' }
+
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 700,
+      padding: '4px 10px', borderRadius: 12,
+      color: conf.color, background: conf.bg,
+      textTransform: 'uppercase', letterSpacing: '0.03em'
+    }}>
+      {conf.icon} {label}
+      {missions && (missions.active > 0 || missions.past > 0) && (
+        <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.75 }}>
+          ({missions.active > 0 && `${missions.active} en cours`}{missions.active > 0 && missions.past > 0 && ' · '}{missions.past > 0 && `${missions.past} passée${missions.past > 1 ? 's' : ''}`})
+        </span>
+      )}
+    </span>
   )
 }
 
@@ -63,7 +89,7 @@ const btnPrimary = {
   color: '#fff', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap'
 }
 
-// ─── Modal message push ────────────────────────────────
+// ─── Modal Push ────
 function PushModal({ open, onClose, profile, lead }) {
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState(null)
@@ -72,19 +98,14 @@ function PushModal({ open, onClose, profile, lead }) {
     if (!open || !lead) return
     setLoading(true); setMsg(null)
     const target = {
-      id: lead.id,
-      name: lead.company,
-      company: lead.company,
-      activityArea: '',
-      reason: lead.reason,
-      contact: lead.contact
+      id: lead.id, name: lead.company, company: lead.company,
+      activityArea: lead.companyActivity || '', reason: lead.reason, contact: lead.contact
     }
     const opportunity = lead.kind === 'opportunity'
       ? { title: lead.title, reference: lead.reference, stateLabel: lead.stateLabel, state: lead.state }
       : null
     fetch('/api/push-message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profile, target, kind: lead.kind, opportunity })
     })
       .then(r => r.json())
@@ -140,17 +161,11 @@ function PushModal({ open, onClose, profile, lead }) {
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
                 fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
                 color: '#1400FF', textTransform: 'uppercase'
-              }}>
-                <Mail size={13} /> Email
+              }}><Mail size={13} /> Email</div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 4, fontWeight: 600 }}>Objet</div>
+              <div style={{ background: '#fafafa', padding: '8px 10px', borderRadius: 6, fontSize: 13, marginBottom: 10 }}>
+                {msg.email?.subject}
               </div>
-              <div style={{
-                fontSize: 12, color: '#666', marginBottom: 4,
-                fontFamily: 'Montserrat, sans-serif', fontWeight: 600
-              }}>Objet</div>
-              <div style={{
-                background: '#fafafa', padding: '8px 10px', borderRadius: 6,
-                fontSize: 13, color: '#111', marginBottom: 10
-              }}>{msg.email?.subject}</div>
               <textarea
                 value={msg.email?.body || ''}
                 onChange={e => setMsg({ ...msg, email: { ...msg.email, body: e.target.value } })}
@@ -166,10 +181,9 @@ function PushModal({ open, onClose, profile, lead }) {
                   <Copy size={12} /> Copier
                 </button>
                 {lead?.contact?.email && (
-                  <a
-                    href={`mailto:${lead.contact.email}?subject=${encodeURIComponent(msg.email?.subject || '')}&body=${encodeURIComponent(msg.email?.body || '')}`}
-                    style={btnPrimary}
-                  ><Send size={11} /> Ouvrir mail</a>
+                  <a href={`mailto:${lead.contact.email}?subject=${encodeURIComponent(msg.email?.subject || '')}&body=${encodeURIComponent(msg.email?.body || '')}`} style={btnPrimary}>
+                    <Send size={11} /> Ouvrir mail
+                  </a>
                 )}
               </div>
             </div>
@@ -179,9 +193,7 @@ function PushModal({ open, onClose, profile, lead }) {
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10,
                 fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
                 color: '#0077b5', textTransform: 'uppercase'
-              }}>
-                <Linkedin size={13} /> LinkedIn
-              </div>
+              }}><Linkedin size={13} /> LinkedIn</div>
               <textarea
                 value={msg.linkedin || ''}
                 onChange={e => setMsg({ ...msg, linkedin: e.target.value })}
@@ -205,7 +217,7 @@ function PushModal({ open, onClose, profile, lead }) {
   )
 }
 
-// ─── Carte piste ────────────────────────────────
+// ─── Carte piste ────
 function LeadRow({ lead, onPush }) {
   return (
     <div style={{
@@ -214,47 +226,51 @@ function LeadRow({ lead, onPush }) {
     }}>
       <ScoreBadge score={lead.score} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Ligne 1 : Société + statut */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-          {lead.company && (
-            <span style={{
-              fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 15, color: '#111'
-            }}>🏢 {lead.company}</span>
-          )}
+        {/* Ligne 1 : Nom société GROS + statut compte */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <span style={{
+            fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 16, color: '#111'
+          }}>
+            <Building2 size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: -2 }} />
+            {lead.company || <span style={{ color: '#c00' }}>Société inconnue</span>}
+          </span>
+          <StatusPill status={lead.companyStatus} label={lead.companyStatusLabel} missions={lead.companyMissions} />
           <SourcePill sourceType={lead.sourceType} kind={lead.kind} />
         </div>
 
-        {/* Ligne 2 : Titre (besoin ou nom+fonction contact) */}
+        {/* Ligne 2 : Secteur + ville */}
+        {(lead.companyActivity || lead.companyTown) && (
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 6, display: 'flex', gap: 12 }}>
+            {lead.companyActivity && <span>{lead.companyActivity}</span>}
+            {lead.companyTown && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <MapPin size={10} /> {lead.companyTown}
+            </span>}
+          </div>
+        )}
+
+        {/* Ligne 3 : Titre du besoin / poste */}
         <div style={{
           fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: '#333',
           fontWeight: 500, marginBottom: 6
         }}>
           {lead.title}
-          {lead.reference && (
-            <span style={{ color: '#888', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
-              · réf. {lead.reference}
-            </span>
-          )}
-          {lead.startDate && (
-            <span style={{ color: '#888', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
-              · démarrage {lead.startDate}
-            </span>
-          )}
+          {lead.reference && <span style={{ color: '#888', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>· réf. {lead.reference}</span>}
+          {lead.startDate && <span style={{ color: '#888', fontWeight: 400, marginLeft: 8, fontSize: 12 }}>· démarrage {lead.startDate}</span>}
         </div>
 
-        {/* Ligne 3 : Raison du match (Claude) */}
+        {/* Ligne 4 : Raison Claude */}
         {lead.reason && (
-          <div style={{
-            fontSize: 12, color: '#555', marginBottom: 8, lineHeight: 1.5
-          }}>{lead.reason}</div>
+          <div style={{ fontSize: 12, color: '#555', marginBottom: 8, lineHeight: 1.5 }}>
+            {lead.reason}
+          </div>
         )}
 
-        {/* Ligne 4 : Contact opérationnel (si présent) */}
-        {lead.contact && (
+        {/* Ligne 5 : Contact opérationnel */}
+        {lead.contact && (lead.contact.firstName || lead.contact.email) && (
           <div style={{
             background: 'rgba(20,0,255,0.04)', padding: '8px 10px', borderRadius: 8,
             fontSize: 12, color: '#333', marginBottom: 6,
-            display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center'
+            display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center'
           }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <User size={11} />
@@ -273,21 +289,18 @@ function LeadRow({ lead, onPush }) {
             )}
             {lead.otherContactsCount > 0 && (
               <span style={{ color: '#888', fontStyle: 'italic', fontSize: 11 }}>
-                (+{lead.otherContactsCount} autre{lead.otherContactsCount > 1 ? 's' : ''} contact{lead.otherContactsCount > 1 ? 's' : ''} dans le compte)
+                (+{lead.otherContactsCount} autre{lead.otherContactsCount > 1 ? 's' : ''} dans ce compte)
               </span>
             )}
           </div>
         )}
 
-        {/* Ligne 5 : Keywords matchés */}
+        {/* Ligne 6 : Keywords matchés */}
         {lead.matchedOn?.length > 0 && (
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, color: '#888' }}>
-            <Search size={10} style={{ marginTop: 2 }} />
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', fontSize: 10, color: '#888', alignItems: 'center' }}>
+            <Search size={10} />
             Matché sur : {lead.matchedOn.map(m => (
-              <code key={m} style={{
-                background: '#f0f0f5', padding: '1px 6px', borderRadius: 4,
-                fontFamily: 'monospace', fontSize: 10
-              }}>{m}</code>
+              <code key={m} style={{ background: '#f0f0f5', padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: 10 }}>{m}</code>
             ))}
           </div>
         )}
@@ -304,72 +317,76 @@ function LeadRow({ lead, onPush }) {
   )
 }
 
-// ─── Page principale ────────────────────────────────
+// ─── Page principale ────
 export default function PushPage() {
   const { user, logout } = useAuth()
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [deepLoading, setDeepLoading] = useState(false)
-  const [pageLoading, setPageLoading] = useState(false)
-  const [state, setState] = useState(null)  // { profile, leads[], cacheKey, page, hasMore, deepScanDone, counts, totalLeads }
+  const [profile, setProfile] = useState(null)
+  const [allLeads, setAllLeads] = useState([])   // stocké côté client
+  const [counts, setCounts] = useState(null)
+  const [displayCount, setDisplayCount] = useState(15)
+  const [deepScanDone, setDeepScanDone] = useState(false)
   const [modal, setModal] = useState({ open: false, lead: null })
 
   const onDrop = useCallback((accepted) => {
     if (!accepted?.length) return
     setFile(accepted[0])
-    setState(null)
+    setProfile(null); setAllLeads([]); setCounts(null); setDisplayCount(15); setDeepScanDone(false)
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop, accept: { 'application/pdf': ['.pdf'] },
-    maxSize: 15 * 1024 * 1024, multiple: false
+    onDrop, accept: { 'application/pdf': ['.pdf'] }, maxSize: 15 * 1024 * 1024, multiple: false
   })
 
   const analyze = async () => {
     if (!file) return toast.error('Uploade un PDF d\'abord')
-    setLoading(true); setState(null)
+    setLoading(true)
+    setProfile(null); setAllLeads([]); setCounts(null); setDisplayCount(15); setDeepScanDone(false)
     try {
       const fd = new FormData()
       fd.append('pdf', file)
       const r = await fetch('/api/boond-push-leads', { method: 'POST', body: fd })
       const j = await r.json()
       if (!r.ok) { toast.error(j.error || 'Erreur'); return }
-      setState(j)
+      setProfile(j.profile)
+      setAllLeads(j.leads || [])
+      setCounts(j.counts)
       if (j.warning) toast(j.warning, { icon: '⚠️' })
     } catch (e) { toast.error(e.message) }
     finally { setLoading(false) }
   }
 
-  const loadMore = async () => {
-    if (!state?.cacheKey) return
-    setPageLoading(true)
-    try {
-      const r = await fetch('/api/boond-push-leads', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cacheKey: state.cacheKey, page: state.page + 1, action: 'next' })
-      })
-      const j = await r.json()
-      if (!r.ok) { toast.error(j.error || 'Erreur'); return }
-      setState({ ...state, page: j.page, leads: [...state.leads, ...j.leads], hasMore: j.hasMore, totalLeads: j.totalLeads })
-    } catch (e) { toast.error(e.message) }
-    finally { setPageLoading(false) }
-  }
-
   const runDeepScan = async () => {
-    if (!state?.cacheKey) return
+    if (!profile) return
     setDeepLoading(true)
     try {
       const r = await fetch('/api/boond-push-leads', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cacheKey: state.cacheKey, page: 1, action: 'deep_scan' })
+        body: JSON.stringify({ profile, action: 'deep_scan' })
       })
       const j = await r.json()
       if (!r.ok) { toast.error(j.error || 'Erreur'); return }
-      setState({ ...state, ...j, leads: j.leads })
-      toast.success('Scan profond terminé — les nouvelles pistes sont intégrées')
+      // Fusionne : dédoublonne par id, retrie par (status, score)
+      const existingIds = new Set(allLeads.map(l => l.id))
+      const merged = [...allLeads, ...(j.additionalLeads || []).filter(l => !existingIds.has(l.id))]
+      const STATUS_ORDER = { active_client: 0, past_client: 1, prospect: 2, unknown: 3 }
+      merged.sort((a, b) => {
+        const sa = STATUS_ORDER[a.companyStatus] ?? 3
+        const sb = STATUS_ORDER[b.companyStatus] ?? 3
+        if (sa !== sb) return sa - sb
+        return (b.score ?? -1) - (a.score ?? -1)
+      })
+      setAllLeads(merged)
+      setDeepScanDone(true)
+      toast.success(`Scan profond : +${j.count || 0} pistes ajoutées`)
     } catch (e) { toast.error(e.message) }
     finally { setDeepLoading(false) }
   }
+
+  const displayedLeads = useMemo(() => allLeads.slice(0, displayCount), [allLeads, displayCount])
+  const hasMore = displayCount < allLeads.length
 
   return (
     <div style={{ minHeight: '100vh', background: '#fafafa', fontFamily: 'DM Sans, sans-serif' }}>
@@ -394,9 +411,7 @@ export default function PushPage() {
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Link to="/app" style={linkStyle}>
-              <ArrowLeft size={13} /> Dossier Generator
-            </Link>
+            <Link to="/app" style={linkStyle}><ArrowLeft size={13} /> Dossier Generator</Link>
             {user && (
               <>
                 <span style={{ fontSize: 13, color: '#555', fontWeight: 500 }}>{user.name || user.email}</span>
@@ -415,14 +430,11 @@ export default function PushPage() {
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem' }}>
         <div style={{ marginBottom: 20 }}>
-          <h1 style={{
-            fontFamily: 'Montserrat, sans-serif', fontSize: 26, fontWeight: 700,
-            color: '#111', margin: '0 0 6px 0'
-          }}>
+          <h1 style={{ fontFamily: 'Montserrat, sans-serif', fontSize: 26, fontWeight: 700, color: '#111', margin: '0 0 6px 0' }}>
             Push dossier → pistes clients
           </h1>
           <p style={{ fontSize: 13, color: '#666', margin: 0 }}>
-            Uploade le dossier PDF d'un consultant. On scanne les besoins Boond + les contacts (fonctions/titres) pour te sortir les pistes ordonnées.
+            Uploade le dossier PDF. On scanne besoins Boond + contacts, on identifie le compte (client actif / ancien / prospect) et on sort les pistes ordonnées.
           </p>
         </div>
 
@@ -433,14 +445,10 @@ export default function PushPage() {
         }}>
           <input {...getInputProps()} />
           <Upload size={32} style={{ color: '#1400FF', marginBottom: 10 }} />
-          <div style={{
-            fontFamily: 'Montserrat, sans-serif', fontWeight: 600, fontSize: 15, color: '#111'
-          }}>
+          <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 600, fontSize: 15, color: '#111' }}>
             {file ? file.name : (isDragActive ? 'Lâche ici' : 'Glisse le dossier PDF ou clique pour choisir')}
           </div>
-          <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-            PDF uniquement, max 15 MB
-          </div>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>PDF uniquement, max 15 MB</div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
@@ -451,7 +459,7 @@ export default function PushPage() {
             cursor: (!file || loading) ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', gap: 8
           }}>
-            {loading ? <><Loader2 size={14} className="pp-spin" /> Analyse Boond…</> : <><FileText size={14} /> Trouver les pistes</>}
+            {loading ? <><Loader2 size={14} className="pp-spin" /> Analyse Boond… (~1-2 min)</> : <><FileText size={14} /> Trouver les pistes</>}
           </button>
         </div>
 
@@ -460,33 +468,33 @@ export default function PushPage() {
             background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
             padding: 32, textAlign: 'center', color: '#888', fontSize: 13
           }}>
-            <div>Lecture PDF → extraction profil → scan opportunités & contacts → scoring IA…</div>
-            <div style={{ fontSize: 11, marginTop: 6, color: '#aaa' }}>~1 min pour le mode rapide</div>
+            <div>Extraction profil → recherche besoins/contacts → enrichissement société + statut → scoring IA…</div>
+            <div style={{ fontSize: 11, marginTop: 6, color: '#aaa' }}>~1-2 min (beaucoup d'appels Boond en parallèle)</div>
           </div>
         )}
 
-        {state && (
+        {profile && (
           <>
-            {/* Bloc profil */}
+            {/* Profil */}
             <div style={{
               background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
               padding: 18, marginBottom: 20
             }}>
               <div style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 700, fontSize: 18, color: '#111' }}>
-                {state.profile?.firstName} {state.profile?.lastName}
+                {profile.firstName} {profile.lastName}
               </div>
-              {state.profile?.role && (
-                <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{state.profile.role}</div>
+              {profile.role && (
+                <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{profile.role}</div>
               )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                {(state.profile?.stack_keywords_simple || []).map(k => (
+                {(profile.stack_keywords_simple || []).map(k => (
                   <span key={k} style={{
                     fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 500,
                     padding: '3px 9px', borderRadius: 10,
                     background: 'rgba(20,0,255,0.08)', color: '#1400FF'
                   }}>{k}</span>
                 ))}
-                {(state.profile?.sectors || []).map(s => (
+                {(profile.sectors || []).map(s => (
                   <span key={s} style={{
                     fontSize: 11, fontFamily: 'Montserrat, sans-serif', fontWeight: 500,
                     padding: '3px 9px', borderRadius: 10,
@@ -494,9 +502,9 @@ export default function PushPage() {
                   }}>{s}</span>
                 ))}
               </div>
-              {state.profile?.summary && (
+              {profile.summary && (
                 <div style={{ fontSize: 12, color: '#666', marginTop: 10, fontStyle: 'italic' }}>
-                  {state.profile.summary}
+                  {profile.summary}
                 </div>
               )}
               <div style={{
@@ -504,23 +512,20 @@ export default function PushPage() {
                 borderTop: '1px solid #f0f0f5', paddingTop: 10,
                 display: 'flex', flexWrap: 'wrap', gap: 12
               }}>
-                <span>🎯 <strong>{state.totalLeads}</strong> pistes retenues (score ≥ 30)</span>
-                <span>📊 Scan : {state.counts?.opportunitiesScanned || 0} besoins + {state.counts?.contactsScanned || 0} contacts</span>
-                {state.counts?.deepAdditionalLeads != null && (
-                  <span>🔍 Scan profond : +{state.counts.deepAdditionalLeads} pistes ajoutées</span>
+                <span>🎯 <strong>{allLeads.length}</strong> pistes retenues</span>
+                {counts?.byStatus && (
+                  <>
+                    <span>🟢 {counts.byStatus.active_client} clients actifs</span>
+                    <span>🔵 {counts.byStatus.past_client} anciens clients</span>
+                    <span>🟠 {counts.byStatus.prospect} prospects</span>
+                    <span>⚪ {counts.byStatus.unknown} inconnus</span>
+                  </>
                 )}
               </div>
-              {(state.counts?.keywordsComposed?.length > 0) && (
-                <div style={{ fontSize: 11, color: '#aaa', marginTop: 6 }}>
-                  Keywords composés : {state.counts.keywordsComposed.map(k => (
-                    <code key={k} style={{ background: '#f0f0f5', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{k}</code>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Bouton scan profond */}
-            {!state.deepScanDone && (
+            {!deepScanDone && (
               <div style={{ marginBottom: 16, textAlign: 'center' }}>
                 <button onClick={runDeepScan} disabled={deepLoading} style={{
                   background: '#fff', color: '#1400FF',
@@ -537,43 +542,35 @@ export default function PushPage() {
               </div>
             )}
 
-            {/* Liste unifiée des pistes */}
-            {state.leads.length === 0 ? (
+            {/* Liste */}
+            {allLeads.length === 0 ? (
               <div style={{
                 background: '#fff', border: '1.5px solid #e8e8f0', borderRadius: 12,
                 padding: 32, textAlign: 'center', color: '#888', fontSize: 13
-              }}>
-                Aucune piste avec score ≥ 30. Essaie le scan profond ou vérifie les keywords extraits.
-              </div>
+              }}>Aucune piste avec score ≥ 30.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-                {state.leads.map(l => (
-                  <LeadRow key={l.id} lead={l} onPush={lead => setModal({ open: true, lead })} />
-                ))}
+                {displayedLeads.map(l => <LeadRow key={l.id} lead={l} onPush={lead => setModal({ open: true, lead })} />)}
               </div>
             )}
 
-            {/* Bouton "15 suivantes" */}
-            {state.hasMore && (
+            {/* Bouton +15 */}
+            {hasMore && (
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <button onClick={loadMore} disabled={pageLoading} style={{
+                <button onClick={() => setDisplayCount(displayCount + 15)} style={{
                   background: '#fff', color: '#1400FF',
                   border: '1.5px solid #1400FF', borderRadius: 10,
-                  padding: '10px 24px', cursor: pageLoading ? 'not-allowed' : 'pointer',
+                  padding: '10px 24px', cursor: 'pointer',
                   fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
                   display: 'inline-flex', alignItems: 'center', gap: 8
                 }}>
-                  {pageLoading
-                    ? <><Loader2 size={14} className="pp-spin" /> Chargement…</>
-                    : <><ChevronDown size={14} /> 15 pistes suivantes ({state.leads.length}/{state.totalLeads})</>
-                  }
+                  <ChevronDown size={14} /> 15 pistes suivantes ({displayedLeads.length}/{allLeads.length})
                 </button>
               </div>
             )}
-
-            {!state.hasMore && state.leads.length > 0 && (
+            {!hasMore && allLeads.length > 0 && (
               <div style={{ textAlign: 'center', fontSize: 11, color: '#aaa', marginBottom: 20 }}>
-                Fin de la liste — {state.totalLeads} pistes au total
+                Fin de la liste — {allLeads.length} pistes au total
               </div>
             )}
           </>
@@ -582,7 +579,7 @@ export default function PushPage() {
         <PushModal
           open={modal.open}
           onClose={() => setModal({ open: false, lead: null })}
-          profile={state?.profile}
+          profile={profile}
           lead={modal.lead}
         />
 
