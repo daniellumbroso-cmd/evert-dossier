@@ -252,52 +252,82 @@ function addProfile(pres, d) {
   if (runs.length) slide.addText(runs, { x: ML, y, w: CW, h: compH, valign: 'top' })
   y += compH + 0.16
 
-  // Principales expériences
-  y += sectionTitle(slide, 'Principales expériences', ML, y)
-  y += listRows(slide, (d.principales_experiences || []).slice(0, 3).map(e => ({
-    left: e.entreprise, mid: e.role + (e.stack ? ' ' + e.stack : ''),
-    right: (e.dates || '').replace(/[A-Za-zÀ-ÿ]+\.? /g, '')
-  })), y)
-  y += 0.2
-
-  // Formation & certifications
+  // Le parcours liste TOUTES les expériences du CV. On le construit depuis
+  // "experiences" (le détail, toujours complet) plutôt que depuis
+  // "principales_experiences", que le prompt limite aux 3 dernières missions.
+  const parcours = ((d.experiences?.length >= (d.principales_experiences?.length || 0)
+    ? d.experiences : d.principales_experiences) || []).map(e => ({
+      left: e.entreprise, mid: e.role + (e.stack ? ' ' + e.stack : ''),
+      right: (e.dates || '').replace(/[A-Za-zÀ-ÿ]+\.? /g, '')
+    }))
   const form = (d.formations || []).map(f => ({
     left: f.ecole || f.diplome, mid: f.ecole ? f.diplome : '', right: f.annee || ''
   }))
+  const langues = (d.langues || []).map(l => `${l.langue} — ${l.niveau}`)
+
+  // Un CV à 6 missions remplit la page à lui seul. Plutôt que d'écarter des
+  // expériences, on laisse le bas du profil déborder sur une seconde page.
+  const needed = 0.36 + measureRows(parcours)
+    + (form.length ? 0.36 + measureRows(form) : 0)
+    + (langues.length ? 0.36 + 0.3 : 0)
+  let target = slide, roomy = false
+  if (y + needed > H - 0.42) { target = liteSlide(pres); y = 0.6; roomy = true }
+
+  y += sectionTitle(target, 'Principales expériences', ML, y)
+  y += listRows(target, parcours, y, roomy)
+  y += roomy ? 0.4 : 0.2
+
   if (form.length) {
-    y += sectionTitle(slide, 'Formation & certifications', ML, y)
-    y += listRows(slide, form.slice(0, 3), y)
-    y += 0.2
+    y += sectionTitle(target, 'Formation & certifications', ML, y)
+    y += listRows(target, form, y, roomy)
+    y += roomy ? 0.4 : 0.2
   }
 
-  // Langues
-  const langues = (d.langues || []).map(l => `${l.langue} — ${l.niveau}`)
   if (langues.length && y < H - 0.85) {
-    y += sectionTitle(slide, 'Langues', ML, y)
-    chipRow(slide, langues, { x: ML, y, maxW: CW, dark: false, size: 6.5 })
+    y += sectionTitle(target, 'Langues', ML, y)
+    chipRow(target, langues, { x: ML, y, maxW: CW, dark: false, size: 6.5 })
   }
 }
 
+// Hauteur qu'occuperaient ces lignes, pour décider d'un débordement de page.
+function measureRows(rows, roomy = false) {
+  const colL = 2.05, colR = roomy ? 1.2 : 0.95, colM = CW - colL - colR - 0.1
+  const dense = rows.length > 4 && !roomy
+  const szM = dense ? 8 : roomy ? 10 : 9
+  return rows.reduce((acc, r) => {
+    const left = (r.left || '').toUpperCase()
+    const base = dense ? 7 : roomy ? 9 : 8
+    const szL = left.length > 34 ? base - 1 : left.length > 24 ? base - 0.5 : base
+    const n = Math.max(lineCount(left, szL, colL - 0.1), lineCount(r.mid || '', szM, colM))
+    return acc + Math.max(dense ? 0.21 : roomy ? 0.34 : 0.255, n * szM * LN * LS.tight / 72 + 0.1) + 0.035
+  }, 0)
+}
+
 // Trois colonnes : intitulé fort à gauche, détail au centre, date à droite
-function listRows(slide, rows, y0) {
-  const colL = 2.05, colR = 0.95, colM = CW - colL - colR - 0.1
+function listRows(slide, rows, y0, roomy = false) {
+  const colL = 2.05, colR = roomy ? 1.2 : 0.95, colM = CW - colL - colR - 0.1
+  // Un CV de 6 missions ne tient pas au même corps qu'un CV de 2 : on resserre.
+  // Sur une page de débordement il y a de la place : on respire au contraire.
+  const dense = rows.length > 4 && !roomy
+  const szM = dense ? 8 : roomy ? 10 : 9
   let y = y0
   rows.forEach(r => {
     // Les intitulés longs (« AgTech Company (Weather Intelligence Platform) »)
     // se chevauchaient : on réduit le corps et on calcule la hauteur réelle.
     const left = (r.left || '').toUpperCase()
-    const szL = left.length > 34 ? 6.5 : left.length > 24 ? 7.2 : 8
+    const base = dense ? 7 : roomy ? 9 : 8
+    const szL = left.length > 34 ? base - 1 : left.length > 24 ? base - 0.5 : base
     const nL = lineCount(left, szL, colL - 0.1)
-    const nM = lineCount(r.mid || '', 9, colM)
-    const h = Math.max(0.255, Math.max(nL, nM) * 9 * LN * LS.tight / 72 + 0.09)
+    const nM = lineCount(r.mid || '', szM, colM)
+    const h = Math.max(dense ? 0.21 : roomy ? 0.34 : 0.255, Math.max(nL, nM) * szM * LN * LS.tight / 72 + 0.1)
     slide.addText(left, {
       x: ML, y, w: colL - 0.1, h, fontSize: szL, fontFace: MONT, bold: true, color: INK,
       valign: 'middle', lineSpacingMultiple: LS.tight })
     slide.addText(r.mid || '', {
-      x: ML + colL, y, w: colM, h, fontSize: 9, fontFace: MONT, color: '333333',
+      x: ML + colL, y, w: colM, h, fontSize: szM, fontFace: MONT, color: '333333',
       valign: 'middle', lineSpacingMultiple: LS.tight })
     slide.addText(r.right || '', {
-      x: ML + CW - colR, y, w: colR, h, fontSize: 9, fontFace: MONT, color: GREY,
+      x: ML + CW - colR, y, w: colR, h, fontSize: Math.min(szM, 9), fontFace: MONT, color: GREY,
       align: 'right', valign: 'middle' })
     rule(slide, ML, y + h, CW, '000000', 86)
     y += h + 0.035
