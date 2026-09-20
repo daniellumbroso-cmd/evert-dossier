@@ -228,7 +228,16 @@ Format : [{"valeur": "12", "libelle": "ans d'expérience"}, {"valeur": "RGAA", "
 
 Pour chaque entrée de "experiences", ajoute "mots_cles" : 1 à 2 mots-clés d'expertise de la mission.
 
-Pour "competences_techniques" dans ce format : 5 à 6 catégories maximum, et 8 items maximum par catégorie (chaque catégorie tient sur une ligne).
+Pour "competences_techniques" dans ce format : 5 catégories maximum. Chaque catégorie doit tenir sur UNE ligne : le nom de la catégorie plus la liste des items ne doit pas dépasser 95 caractères au total. Coupe les items les moins pertinents plutôt que de déborder.
+
+LONGUEURS IMPÉRATIVES POUR CE FORMAT (la mise en page est contrainte, un texte trop long casse le document) :
+- "a_propos" : UN SEUL paragraphe de 3 à 4 phrases, 450 caractères MAXIMUM. Va à l'essentiel : le métier, le niveau, les domaines, ce qu'il sait faire. Pas de développement sur la personnalité.
+- "points_forts" : "valeur" 5 caractères maximum ; "libelle" 3 mots et 22 caractères maximum (ex: "ans d'expérience", "secteurs couverts", "référent RGAA").
+- "entreprise" (dans "experiences" ET "principales_experiences") : le nom de la société SEUL, 30 caractères maximum, sans parenthèse explicative. Le contexte ("plateforme d'intelligence géospatiale"...) va dans "projet", pas dans le nom.
+- "accroche" : 55 caractères maximum.
+- "enjeux" et "resultats" : 2 à 3 éléments, 110 caractères maximum chacun.
+- "role" : 45 caractères maximum.
+- "diplome" : 60 caractères maximum ; "ecole" : 35 caractères maximum.
 `
 
 export default async function handler(req, res) {

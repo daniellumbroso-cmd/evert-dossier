@@ -30,7 +30,13 @@ const DARKBG = '08080A'
 
 const MONT = 'Montserrat'
 const CHAR_EM = 0.58            // largeur moyenne d'un glyphe, en em
-const LINE_EM = 1.25
+// Hauteur naturelle d'une ligne, en em. PptxGenJS applique `lineSpacingMultiple`
+// EN PLUS de cette hauteur : une estimation qui l'ignore sous-évalue de 30 à 40 %
+// et le texte finit par recouvrir le bloc suivant. Les interlignes sont donc
+// nommés ici et passés au calcul comme au rendu.
+const LN = 1.23
+const LS = { tight: 1.0, head: 0.98, body: 1.3, airy: 1.42 }
+const SAFETY = 1.05             // on réserve un peu large plutôt que de chevaucher
 
 const asset = (f) => path.join(process.cwd(), 'template_assets', f)
 
@@ -41,7 +47,8 @@ const asset = (f) => path.join(process.cwd(), 'template_assets', f)
 const emOf = (s) => (s && s === s.toUpperCase() && /[A-ZÀ-Þ]/.test(s)) ? 0.68 : CHAR_EM
 const textWidth = (s, sz, em) => (s || '').length * sz * (em || emOf(s)) / 72
 const lineCount = (s, sz, w, em) => Math.max(1, Math.ceil(textWidth(s, sz, em) / Math.max(0.3, w)))
-const textHeight = (s, sz, w, em) => lineCount(s, sz, w, em) * sz * LINE_EM / 72
+const textHeight = (s, sz, w, em, ls = LS.body) =>
+  lineCount(s, sz, w, em) * sz * LN * ls / 72 * SAFETY
 
 function slideWith(pres, bg) {
   const slide = pres.addSlide()
@@ -136,7 +143,7 @@ function addCover(pres, d) {
   logo(slide, 'v2_logo_edg.png', ML + 2.94, gY + 0.29, 0.46)
   slide.addText(
     parseRichText(d.groupe_baseline || GROUPE_BASELINE, { fontSize: 8, fontFace: MONT, color: SOFT }),
-    { x: ML + 0.26, y: gY + 0.74, w: CW - 0.52, h: 0.5, valign: 'top', lineSpacingMultiple: 1.25 }
+    { x: ML + 0.26, y: gY + 0.74, w: CW - 0.52, h: 0.5, valign: 'top', lineSpacingMultiple: LS.body }
   )
 
   // Bloc identité
@@ -183,17 +190,22 @@ function addProfile(pres, d) {
 
   y += eyebrow(slide, 'Le profil', ML, y, BLUE)
   const accroche = (d.accroche || d.titre || '').toUpperCase()
-  const accH = textHeight(accroche, 22, CW) + 0.08
+  const accH = textHeight(accroche, 22, CW, null, LS.head) + 0.08
   slide.addText(accroche, {
     x: ML, y, w: CW, h: accH, fontSize: 22, fontFace: MONT, bold: true, color: INK,
-    valign: 'top', lineSpacingMultiple: 0.95
+    valign: 'top', lineSpacingMultiple: LS.head
   })
   y += accH + 0.16
 
+  // Le résumé est le bloc le plus variable d'un CV à l'autre. On lui donne un
+  // budget de hauteur et on réduit le corps pour le tenir : sans ça un résumé
+  // bavard repousse « Formation » hors de la page.
   const resume = (d.a_propos || '').split('\n\n').filter(Boolean).join(' ')
-  const resH = textHeight(resume, 10, CW) + 0.1
-  slide.addText(parseRichText(resume, { fontSize: 10, fontFace: MONT, color: '2B2B2B' }),
-    { x: ML, y, w: CW, h: resH, valign: 'top', lineSpacingMultiple: 1.35 })
+  const RES_BUDGET = 1.95
+  let resSize = [10, 9.5, 9, 8.5, 8].find(sz => textHeight(resume, sz, CW) <= RES_BUDGET) || 8
+  const resH = Math.min(RES_BUDGET, textHeight(resume, resSize, CW)) + 0.1
+  slide.addText(parseRichText(resume, { fontSize: resSize, fontFace: MONT, color: '2B2B2B' }),
+    { x: ML, y, w: CW, h: resH, valign: 'top', lineSpacingMultiple: LS.body, fit: 'shrink' })
   y += resH + 0.22
 
   // Points forts : uniquement ceux qui valorisent réellement le profil
@@ -204,22 +216,24 @@ function addProfile(pres, d) {
       const x = ML + i * (cardW + 0.24)
       slide.addShape('roundRect', { x, y, w: cardW, h: 1.05, rectRadius: 0.1,
         fill: { color: 'FFFFFF' }, line: { color: '000000', width: 0.5, transparency: 90 } })
-      slide.addText(String(p.valeur || '').toUpperCase(), {
-        x: x + 0.14, y: y + 0.13, w: cardW - 0.28, h: 0.45, fontSize: 24, fontFace: MONT,
+      const val = String(p.valeur || '').toUpperCase()
+      const szV = val.length > 5 ? 16 : val.length > 3 ? 19 : 24
+      slide.addText(val, {
+        x: x + 0.14, y: y + 0.13, w: cardW - 0.28, h: 0.45, fontSize: szV, fontFace: MONT,
         bold: true, color: INK, valign: 'top', charSpacing: -0.5 })
       slide.addText(String(p.libelle || '').toUpperCase(), {
-        x: x + 0.14, y: y + 0.62, w: cardW - 0.28, h: 0.35, fontSize: 6.5, fontFace: MONT,
-        bold: true, color: GREY, charSpacing: 1.1, valign: 'top' })
+        x: x + 0.14, y: y + 0.6, w: cardW - 0.28, h: 0.4, fontSize: 6, fontFace: MONT,
+        bold: true, color: GREY, charSpacing: 0.8, valign: 'top', lineSpacingMultiple: LS.tight })
     })
     const x4 = ML + 3 * (cardW + 0.24)
     slide.addShape('roundRect', { x: x4, y, w: cardW, h: 1.05, rectRadius: 0.1,
       fill: { color: 'FFFFFF' }, line: { color: '000000', width: 0.5, transparency: 90 } })
     slide.addText('EXPERTISES CLÉS', { x: x4 + 0.14, y: y + 0.13, w: cardW - 0.28, h: 0.2,
       fontSize: 6.5, fontFace: MONT, bold: true, color: BLUE, charSpacing: 1.1, valign: 'top' })
-    slide.addText((d.expertises_cles || []).slice(0, 4).join('\n'), {
-      x: x4 + 0.14, y: y + 0.36, w: cardW - 0.28, h: 0.62, fontSize: 7.5, fontFace: MONT,
-      bold: true, color: BLUE, valign: 'top', lineSpacingMultiple: 1.3 })
-    y += 1.05 + 0.3
+    slide.addText((d.expertises_cles || []).slice(0, 3).join('\n'), {
+      x: x4 + 0.14, y: y + 0.34, w: cardW - 0.28, h: 0.66, fontSize: 6.5, fontFace: MONT,
+      bold: true, color: BLUE, valign: 'top', lineSpacingMultiple: LS.tight, fit: 'shrink' })
+    y += 1.05 + 0.24
   }
 
   // Compétences : une ligne par famille — un seul bloc de texte, facile à éditer
@@ -228,14 +242,15 @@ function addProfile(pres, d) {
   ;(d.competences_techniques || []).forEach((cat, i, arr) => {
     runs.push({ text: (cat.categorie || '').toUpperCase() + '   ',
       options: { fontSize: 8, fontFace: MONT, bold: true, color: BLUE, charSpacing: 0.5 } })
-    runs.push({ text: (cat.items || []).join(', '),
-      options: { fontSize: 9, fontFace: MONT, color: '222222', breakLine: true,
+    const items = (cat.items || []).join(', ')
+    runs.push({ text: items,
+      options: { fontSize: 8.5, fontFace: MONT, color: '222222', breakLine: true,
                  paraSpaceAfter: i < arr.length - 1 ? 9 : 0 } })
   })
   const compH = (d.competences_techniques || []).reduce((acc, c) =>
-    acc + textHeight((c.categorie || '') + '   ' + (c.items || []).join(', '), 9, CW, 0.54) + 0.125, 0)
+    acc + textHeight((c.categorie || '') + '   ' + (c.items || []).join(', '), 8.5, CW, 0.54, LS.tight) + 0.125, 0)
   if (runs.length) slide.addText(runs, { x: ML, y, w: CW, h: compH, valign: 'top' })
-  y += compH + 0.2
+  y += compH + 0.16
 
   // Principales expériences
   y += sectionTitle(slide, 'Principales expériences', ML, y)
@@ -265,14 +280,22 @@ function addProfile(pres, d) {
 
 // Trois colonnes : intitulé fort à gauche, détail au centre, date à droite
 function listRows(slide, rows, y0) {
-  const colL = 1.55, colR = 0.95
+  const colL = 2.05, colR = 0.95, colM = CW - colL - colR - 0.1
   let y = y0
   rows.forEach(r => {
-    const h = 0.255
-    slide.addText((r.left || '').toUpperCase(), {
-      x: ML, y, w: colL, h, fontSize: 8, fontFace: MONT, bold: true, color: INK, valign: 'middle' })
+    // Les intitulés longs (« AgTech Company (Weather Intelligence Platform) »)
+    // se chevauchaient : on réduit le corps et on calcule la hauteur réelle.
+    const left = (r.left || '').toUpperCase()
+    const szL = left.length > 34 ? 6.5 : left.length > 24 ? 7.2 : 8
+    const nL = lineCount(left, szL, colL - 0.1)
+    const nM = lineCount(r.mid || '', 9, colM)
+    const h = Math.max(0.255, Math.max(nL, nM) * 9 * LN * LS.tight / 72 + 0.09)
+    slide.addText(left, {
+      x: ML, y, w: colL - 0.1, h, fontSize: szL, fontFace: MONT, bold: true, color: INK,
+      valign: 'middle', lineSpacingMultiple: LS.tight })
     slide.addText(r.mid || '', {
-      x: ML + colL, y, w: CW - colL - colR, h, fontSize: 9, fontFace: MONT, color: '333333', valign: 'middle' })
+      x: ML + colL, y, w: colM, h, fontSize: 9, fontFace: MONT, color: '333333',
+      valign: 'middle', lineSpacingMultiple: LS.tight })
     slide.addText(r.right || '', {
       x: ML + CW - colR, y, w: colR, h, fontSize: 9, fontFace: MONT, color: GREY,
       align: 'right', valign: 'middle' })
@@ -338,7 +361,7 @@ function renderExpBody(slide, blocks, tier, y0) {
     if (b.type === 'projet') {
       const h = textHeight(b.text, tier.f, CW) + 0.06
       slide.addText(parseRichText(b.text, { fontSize: tier.f, fontFace: MONT, color: '3A3A3A', italic: true }),
-        { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: 1.3 })
+        { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: LS.body })
       y += h + 0.1
     } else if (b.type === 'section') {
       if (y > y0 + 0.05) y += 0.13
@@ -351,7 +374,7 @@ function renderExpBody(slide, blocks, tier, y0) {
       const h = textHeight(b.text, tier.f, CW - 0.22)
       slide.addText('→', { x: ML, y, w: 0.2, h, fontSize: tier.f, fontFace: MONT, color: BLUE, valign: 'top' })
       slide.addText(parseRichText(b.text, { fontSize: tier.f, fontFace: MONT, color: '222222' }),
-        { x: ML + 0.24, y, w: CW - 0.24, h, valign: 'top', lineSpacingMultiple: 1.28 })
+        { x: ML + 0.24, y, w: CW - 0.24, h, valign: 'top', lineSpacingMultiple: LS.body })
       y += h + tier.sa / 72
     } else if (b.type === 'box') {
       pending.push(b)
@@ -361,7 +384,7 @@ function renderExpBody(slide, blocks, tier, y0) {
         fontFace: MONT, bold: true, color: GREY, charSpacing: 1.2, valign: 'top' })
       const h = textHeight(b.text, tier.f - 0.5, CW) + 0.06
       slide.addText(b.text, { x: ML, y: y + 0.22, w: CW, h, fontSize: tier.f - 0.5,
-        fontFace: MONT, color: '444444', valign: 'top', lineSpacingMultiple: 1.3 })
+        fontFace: MONT, color: '444444', valign: 'top', lineSpacingMultiple: LS.body })
       y += 0.22 + h + 0.06
     }
     if (pending.length === 2 || (pending.length && b === blocks[blocks.length - 1] && b.type !== 'env')) {
@@ -382,23 +405,36 @@ function drawBoxes(slide, boxes, tier, y) {
     slide.addText(b.label.toUpperCase(), { x: x + 0.16, y: y + 0.09, w: bw - 0.3, h: 0.18,
       fontSize: 6.5, fontFace: MONT, bold: true, color: b.color, charSpacing: 1.2, valign: 'top' })
     slide.addText(parseRichText(b.text, { fontSize: tier.f - 0.5, fontFace: MONT, color: '222222' }),
-      { x: x + 0.16, y: y + 0.3, w: bw - 0.32, h: bh - 0.38, valign: 'top', lineSpacingMultiple: 1.28 })
+      { x: x + 0.16, y: y + 0.3, w: bw - 0.32, h: bh - 0.38, valign: 'top', lineSpacingMultiple: LS.body })
   })
   return bh + 0.14
 }
 
 function expHeader(slide, exp, y, compact) {
-  const hBand = compact ? 0.78 : 1.42
   if (!compact) {
+    // Le nom d'entreprise peut être long : on réduit le corps et on fait
+    // grandir le bandeau, sinon le titre recouvre le rôle en dessous.
+    const nom = exp.entreprise || ''
+    const szN = nom.length > 42 ? 14 : nom.length > 28 ? 17 : 20
+    const nLines = lineCount(nom, szN, CW - 1.8)
+    const titleH = nLines * szN * LN * LS.tight / 72
+    const yRole = 0.24 + titleH + 0.08
+    const hBand = yRole + 0.26 + 0.38
     slide.addShape('rect', { x: RAIL, y: 0, w: W - RAIL, h: hBand, fill: { color: DARKBG }, line: { type: 'none' } })
-    slide.addText(exp.entreprise || '', { x: ML, y: 0.24, w: CW - 1.7, h: 0.42,
-      fontSize: 20, fontFace: MONT, bold: true, color: WHITE, valign: 'top' })
-    slide.addText((exp.dates || '').toUpperCase(), { x: ML + CW - 1.7, y: 0.3, w: 1.7, h: 0.25,
+    slide.addText(nom, { x: ML, y: 0.24, w: CW - 1.8, h: titleH + 0.06,
+      fontSize: szN, fontFace: MONT, bold: true, color: WHITE, valign: 'top',
+      lineSpacingMultiple: LS.tight })
+    slide.addText((exp.dates || '').toUpperCase(), { x: ML + CW - 1.75, y: 0.3, w: 1.75, h: 0.25,
       fontSize: 7.5, fontFace: MONT, bold: true, color: GDARK, align: 'right', charSpacing: 1.1 })
     slide.addText(exp.role || '', {
-      x: ML, y: 0.68, w: CW, h: 0.26, fontSize: 9.5, fontFace: MONT, color: 'E6E6EE', valign: 'top' })
-    chipRow(slide, [...(exp.mots_cles || []).slice(0, 2), ...(exp.env_technique || []).slice(0, 3)],
-      { x: ML, y: 1.0, maxW: CW, size: 6 })
+      x: ML, y: yRole, w: CW, h: 0.26, fontSize: 9.5, fontFace: MONT, color: 'E6E6EE', valign: 'top' })
+    const asList = v => Array.isArray(v) ? v : (typeof v === 'string' && v ? v.split(/\s*[,/·]\s*/) : [])
+    const tags = []
+    for (const t of [...asList(exp.mots_cles), ...asList(exp.env_technique)]) {
+      const k = t.trim().toLowerCase()
+      if (k && !tags.some(v => v.trim().toLowerCase() === k)) tags.push(t.trim())
+    }
+    chipRow(slide, tags.slice(0, 5), { x: ML, y: yRole + 0.3, maxW: CW, size: 6 })
     return hBand + 0.26
   }
   // Expérience enchaînée sur la même page : en-tête clair et compact
@@ -447,7 +483,7 @@ function addEcosystem(pres, d) {
   y += eyebrow(slide, 'ever"T · WOLD · European Digital Group', ML, y, PURPLE, 8)
   slide.addText('250 TALENTS,\nUN GROUPE EUROPÉEN', {
     x: ML, y: y + 0.04, w: CW, h: 0.92, fontSize: 25, fontFace: MONT, bold: true,
-    color: WHITE, valign: 'top', lineSpacingMultiple: 0.98 })
+    color: WHITE, valign: 'top', lineSpacingMultiple: LS.head })
   y += 1.18
 
   // Bandeau de marques
@@ -464,15 +500,15 @@ function addEcosystem(pres, d) {
   const lead = '**250 talents** en conseil Tech, Data.IA et Product. Une communauté tech IA-native, bâtie sur l\'apprentissage continu.'
   let h = textHeight(lead, 11.5, CW) + 0.1
   slide.addText(parseRichText(lead, { fontSize: 11.5, fontFace: MONT, color: 'E2E2EA' }),
-    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: 1.3 })
+    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: LS.body })
   y += h + 0.2
 
   const detail = 'Des **experts Produit, Tech et Data.IA** animent les communautés métiers et accompagnent ' +
     'les consultants en mission. Chaque mois : un **hackathon IA** et un **dîner client entre pairs**. ' +
     'Le reste de l\'année, **Le Tech Show** d\'EDG, notre **podcast** et les événements **lesBigBoss**.'
-  h = textHeight(detail, 9, CW) + 0.1
+  h = textHeight(detail, 9, CW, null, LS.airy) + 0.1
   slide.addText(parseRichText(detail, { fontSize: 9, fontFace: MONT, color: GDARK }),
-    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: 1.42 })
+    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: LS.airy })
   y += h + 0.42
 
   rule(slide, ML, y, CW, 'FFFFFF', 80)
@@ -491,17 +527,17 @@ function addEcosystem(pres, d) {
   const edg = 'À l\'échelle d\'**European Digital Group**. Le groupe porte un **Centre d\'Excellence IA** : ' +
     'il identifie les cas d\'usage à fort impact, fédère les expertises des filiales et diffuse les méthodes. ' +
     'Nos consultants en bénéficient directement.'
-  h = textHeight(edg, 9, CW) + 0.1
+  h = textHeight(edg, 9, CW, null, LS.airy) + 0.1
   slide.addText(parseRichText(edg, { fontSize: 9, fontFace: MONT, color: SOFT }),
-    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: 1.42 })
+    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: LS.airy })
   y += h + 0.42
 
   y += eyebrow(slide, 'Comment nous travaillons', ML, y, GDARK)
   const modal = 'Expert dédié ou équipe projet · sur site ou hybride · régie ou forfait · ' +
     'sélection sur votre stack · **suivi projet régulier** · partout en France.'
-  h = textHeight(modal, 9, CW) + 0.1
+  h = textHeight(modal, 9, CW, null, LS.airy) + 0.1
   slide.addText(parseRichText(modal, { fontSize: 9, fontFace: MONT, color: SOFT }),
-    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: 1.42 })
+    { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: LS.airy })
 
   // Pied de page : contact
   const fy = H - 1.24
@@ -512,7 +548,7 @@ function addEcosystem(pres, d) {
   slide.addText([c.role || 'Fondateur ever"T', c.tel || '06 12 54 76 13',
                  c.email || 'daniel.lumbroso@ever-t.fr', 'ever-t.fr'].join(' · '), {
     x: ML, y: fy + 0.47, w: 4.3, h: 0.4, fontSize: 8, fontFace: MONT, color: GDARK,
-    valign: 'top', lineSpacingMultiple: 1.3 })
+    valign: 'top', lineSpacingMultiple: LS.body })
   logo(slide, 'v2_logo_evert.png', ML + CW - 1.86, fy + 0.5, 0.84)
   logo(slide, 'v2_logo_wold.png', ML + CW - 0.92, fy + 0.56, 0.52)
   logo(slide, 'v2_logo_edg.png', ML + CW - 0.34, fy + 0.54, 0.34)
