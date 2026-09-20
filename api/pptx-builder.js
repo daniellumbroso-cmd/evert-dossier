@@ -33,8 +33,8 @@ const BULLET = { code: '25CF', indent: 12 }
 // partout → un seul paragraphe, un pPr cohérent, une seule puce.
 const BULLET_RUN = { bullet: BULLET, align: 'left' }
 
-// Parse **gras** en rich text PptxGenJS
-function parseRichText(text, baseOpts = {}) {
+// Parse **gras** en rich text PptxGenJS (réutilisé par le builder v2)
+export function parseRichText(text, baseOpts = {}) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return parts.filter(p => p.length > 0).map(part => {
     const isBold = part.startsWith('**') && part.endsWith('**')

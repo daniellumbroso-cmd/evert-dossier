@@ -23,6 +23,7 @@ export default function AppPage() {
   const [pdfFile, setPdfFile] = useState(null)
   const [cvText, setCvText] = useState('')
   const [community, setCommunity] = useState('DATA')
+  const [format, setFormat] = useState('classique')
   const [instructions, setInstructions] = useState('')
   const [besoinClient, setBesoinClient] = useState('')
   const [loading, setLoading] = useState(false)
@@ -109,6 +110,7 @@ export default function AppPage() {
     try {
       const formData = new FormData()
       formData.append('community', community)
+      formData.append('format', format)
       if (instructions) formData.append('instructions', instructions)
       if (besoinPourGeneration) formData.append('besoinClient', besoinPourGeneration)
       if (tab === 'pdf' && pdfFile) formData.append('pdf', pdfFile)
@@ -529,6 +531,35 @@ export default function AppPage() {
                 }}>
                   Options
                 </h2>
+
+                {/* Le format se choisit AVANT la génération : un dossier = un format */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#1400FF', marginBottom: 6, fontFamily: 'Montserrat, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Format du dossier
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[
+                      { id: 'classique', label: 'Classique', desc: 'Le format actuel' },
+                      { id: 'v2', label: 'ever"T · EDG', desc: 'Nouveau format' }
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setFormat(f.id)}
+                        style={{
+                          flex: 1, padding: '9px 10px', borderRadius: 8, cursor: 'pointer',
+                          textAlign: 'left', fontFamily: 'Montserrat, sans-serif',
+                          border: format === f.id ? '1.5px solid #1400FF' : '1.5px solid #e0e0e0',
+                          background: format === f.id ? '#f0f0ff' : '#fff',
+                          color: format === f.id ? '#1400FF' : '#111', outline: 'none'
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{f.label}</div>
+                        <div style={{ fontSize: 10, color: format === f.id ? '#1400FF' : '#9a9a90', marginTop: 2 }}>{f.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#1400FF', marginBottom: 6, fontFamily: 'Montserrat, sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em' }}>

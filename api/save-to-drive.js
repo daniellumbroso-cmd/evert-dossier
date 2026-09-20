@@ -20,7 +20,9 @@ export default async function handler(req, res) {
 
   try {
     const { buildPptx } = await import('./pptx-builder.js')
-    const pptxBuffer = await buildPptx(dossier)
+    const { buildPptxV2 } = await import('./pptx-builder-v2.js')
+    const build = dossier.format === 'v2' ? buildPptxV2 : buildPptx
+    const pptxBuffer = await build(dossier)
 
     const auth = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,

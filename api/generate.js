@@ -200,6 +200,37 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans backticks :
   "corps": "Corps du mail complet avec sauts de ligne \\n"
 }`
 
+
+// Champs supplémentaires demandés uniquement pour le nouveau format de dossier.
+// Le format historique n'en a pas besoin : on ne les réclame donc pas pour lui.
+const PROMPT_FORMAT_V2 = `
+
+FORMAT "EVER\"T 2" — CHAMPS SUPPLÉMENTAIRES OBLIGATOIRES :
+
+"prenom" : le prénom seul du candidat (la couverture n'affiche pas le nom de famille).
+
+"metier" : 1 à 2 intitulés séparés par " / ", en 2 à 5 mots chacun (ex: "Développeur Frontend / Expert Accessibilité"). C'est le titre affiché en couverture.
+
+"accroche" : une phrase de 4 à 8 mots qui résume ce que le candidat sait faire, à l'infinitif ou en nominal (ex: "Construire des interfaces accessibles à tous"). Pas de nom propre, pas de ponctuation finale.
+
+"expertises_cles" : 3 à 4 mots-clés d'expertise différenciants, 1 à 3 mots chacun (ex: "RGAA / WCAG", "Design System"). Ce sont les arguments forts, pas la stack brute.
+
+"mots_cles_stack" : 5 à 7 technologies principales, 1 à 2 mots chacune.
+
+"points_forts" : 0 à 3 encadrés chiffrés mis en avant. RÈGLE IMPÉRATIVE — un encadré ne doit JAMAIS desservir le candidat :
+- n'inscris un point fort que s'il est réellement un argument de vente ;
+- si un besoin client est fourni et que l'ancienneté du candidat est INFÉRIEURE à celle demandée, N'AFFICHE PAS les années d'expérience ;
+- n'invente jamais un chiffre, et n'arrondis jamais à la hausse ;
+- s'il n'y a pas 3 vrais atouts, n'en mets que 2, ou aucun. Mieux vaut un encadré de moins qu'un encadré tiède.
+Pioche dans : certification ou label obtenu, expertise de référence, résultat concret et vérifiable, technologie réellement maîtrisée, nombre de secteurs couverts, nombre d'années (seulement si c'est un atout).
+Format : [{"valeur": "12", "libelle": "ans d'expérience"}, {"valeur": "RGAA", "libelle": "référent · label AccessiWeb"}]
+"valeur" fait 1 à 5 caractères, "libelle" 2 à 4 mots.
+
+Pour chaque entrée de "experiences", ajoute "mots_cles" : 1 à 2 mots-clés d'expertise de la mission.
+
+Pour "competences_techniques" dans ce format : 5 à 6 catégories maximum, et 8 items maximum par catégorie (chaque catégorie tient sur une ligne).
+`
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
@@ -215,6 +246,7 @@ export default async function handler(req, res) {
     const instructions = fields.instructions?.[0] || ''
     const cvText = fields.cvText?.[0] || ''
     const besoinClient = fields.besoinClient?.[0] || ''
+    const format = fields.format?.[0] === 'v2' ? 'v2' : 'classique'
     const pdfFile = files.pdf?.[0]
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -335,7 +367,7 @@ export default async function handler(req, res) {
       const response = await anthropic.messages.create({
         model: 'claude-opus-4-5',
         max_tokens: 16000,
-        system: SYSTEM_PROMPT,
+        system: format === 'v2' ? SYSTEM_PROMPT + PROMPT_FORMAT_V2 : SYSTEM_PROMPT,
         messages
       })
 
@@ -358,6 +390,8 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Erreur de génération : réponse tronquée. Réessayez.' })
       }
 
+      // Le format voyage avec le dossier : l'export saura quel gabarit utiliser
+      dossier.format = format
       res.json({ success: true, dossier })
     } catch (apiErr) {
       console.error('Claude error:', apiErr.message || apiErr)

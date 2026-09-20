@@ -1,4 +1,5 @@
 import { buildPptx } from './pptx-builder.js'
+import { buildPptxV2 } from './pptx-builder-v2.js'
 import { buildDossierFilename, contentDisposition } from './filename-utils.js'
 
 function getSession(req) {
@@ -16,7 +17,8 @@ export default async function handler(req, res) {
   if (!dossier) return res.status(400).json({ error: 'Dossier manquant' })
 
   try {
-    const buffer = await buildPptx(dossier)
+    const build = dossier.format === 'v2' ? buildPptxV2 : buildPptx
+    const buffer = await build(dossier)
     const filename = buildDossierFilename(dossier, 'pptx')
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
