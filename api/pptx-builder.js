@@ -17,6 +17,9 @@ const LIGHT = 'fafaf8'
 const W = 7.5
 const H = 10.61
 
+// Google Slides ignore bullet:true — il faut un caractère explicite (● U+25CF)
+const BULLET = { code: '25CF' }
+
 // Parse **gras** en rich text PptxGenJS
 function parseRichText(text, baseOpts = {}) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
@@ -108,7 +111,7 @@ function addResumeSlide(pres, d) {
   const expRuns = expItems.flatMap((item, i) => {
     const runs = item.richText
     // Ajouter bullet sur premier run
-    runs[0].options.bullet = true
+    runs[0].options.bullet = BULLET
     return runs
   })
   slide.addText(expRuns, { x: 0.5, y, w: W - 0.9, h: 1.1 })
@@ -119,7 +122,7 @@ function addResumeSlide(pres, d) {
   y += 0.55
 
   const techItems = d.competences_techniques.map((cat, i) => [
-    { text: cat.categorie + ' : ', options: { bullet: true, bold: true, fontSize: 9.5, color: BLUE, fontFace: 'Montserrat' } },
+    { text: cat.categorie + ' : ', options: { bullet: BULLET, bold: true, fontSize: 9.5, color: BLUE, fontFace: 'Montserrat' } },
     { text: cat.items.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: i < d.competences_techniques.length - 1, paraSpaceAfter: 10 } }
   ]).flat()
   slide.addText(techItems, { x: 0.5, y, w: W - 0.9, h: 1.5 })
@@ -201,14 +204,22 @@ function _renderExpSlide(pres, exp, isContinued) {
   const runs = []
   const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 4, fontFace: 'Montserrat', color: BLACK, paraSpaceAfter: spaceBr } })
   const line = (text, opts = {}) => {
-    runs.push({ text, options: { fontSize: fSize, fontFace: 'Montserrat', color: BLACK, breakLine: true, ...opts } })
+    const base = { fontSize: fSize, fontFace: 'Montserrat', color: BLACK, ...opts }
+    const parts = parseRichText(text, base)
+    if (parts.length === 0) {
+      runs.push({ text, options: { ...base, breakLine: true } })
+      return
+    }
+    parts.forEach((p, i) => {
+      runs.push({ text: p.text, options: { ...p.options, breakLine: i === parts.length - 1 } })
+    })
   }
   const bulletLine = (text, opts = {}) => {
     const parts = parseRichText(text, { fontSize: fSize, color: BLACK, fontFace: 'Montserrat', ...opts })
     parts.forEach((p, i) => {
       runs.push({
         text: p.text,
-        options: { ...p.options, bullet: i === 0, breakLine: i === parts.length - 1, paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0 }
+        options: { ...p.options, bullet: i === 0 ? BULLET : false, breakLine: i === parts.length - 1, paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0 }
       })
     })
   }
@@ -228,7 +239,7 @@ function _renderExpSlide(pres, exp, isContinued) {
         text: p.text,
         options: {
           ...p.options,
-          bullet: i === 0,
+          bullet: i === 0 ? BULLET : false,
           breakLine: i === parts.length - 1,
           paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0,
         }

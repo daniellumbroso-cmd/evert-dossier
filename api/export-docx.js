@@ -1,6 +1,7 @@
 import { Packer } from 'docx'
 import { buildDocument } from './docx-builder.js'
 import { generateCoverWithText } from './cover-utils.js'
+import { buildDossierFilename, contentDisposition } from './filename-utils.js'
 import fs from 'fs'
 import path from 'path'
 
@@ -28,10 +29,10 @@ export default async function handler(req, res) {
     const doc = buildDocument(dossier, coverImgBuffer)
     const buffer = await Packer.toBuffer(doc)
 
-    const filename = `Dossier_EverT_${dossier.nom.replace(/\s+/g, '_')}.docx`
+    const filename = buildDossierFilename(dossier, 'docx')
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Disposition', contentDisposition(filename))
     res.setHeader('Content-Length', buffer.length)
     res.send(buffer)
   } catch (err) {

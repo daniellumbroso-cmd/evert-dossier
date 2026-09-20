@@ -67,10 +67,15 @@ ADAPTATION AU BESOIN CLIENT (si besoin fourni) :
 - WORDING : dans le résumé et les expériences, adapter les formulations pour mettre en avant ce qui correspond au besoin (sans invention) — ex: si besoin "PM en binôme", mettre en avant la capacité à travailler en collaboration
 - AJUSTEMENTS : lister de manière concise (3-6 points max) les adaptations faites pour coller au besoin
 
+TITRE COURT :
+- "titre_court" est une version condensée de "titre" : 2 à 4 mots maximum, sans "/" ni ponctuation (ex: titre "Product Owner / Secteur Public / Jira / Confluence" → titre_court "Product Owner Secteur Public")
+- Il sert à nommer le fichier du dossier, il doit donc rester lisible et cohérent avec "titre"
+
 RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
 {
   "nom": "PRÉNOM NOM",
   "titre": "Rôle principal / Spécialité Stack1 / Stack2 / Stack3",
+  "titre_court": "Rôle principal en 2 à 4 mots maximum, sans / ni ponctuation, cohérent avec titre (sert à nommer le fichier)",
   "a_propos": "Paragraphe 1\\n\\nParagraphe 2\\n\\nParagraphe 3",
   "principales_experiences": [
     {"entreprise": "", "role": "", "stack": "", "dates": ""}

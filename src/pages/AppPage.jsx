@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import DossierPreview from '../components/DossierPreview'
 import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search, Send } from 'lucide-react'
+import { buildDossierFilename } from '../../api/filename-utils.js'
 
 const COMMUNITIES = ['DATA', 'Product', 'Mobile / Dev', 'Web', 'DevOps / Cloud', 'IA / ML']
 
@@ -184,7 +185,7 @@ export default function AppPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Dossier_EverT_${dossier.nom.replace(/\s+/g, '_')}.docx`
+      a.download = buildDossierFilename(dossier, 'docx')
       a.click()
       URL.revokeObjectURL(url)
       toast.success('Fichier Word téléchargé !')
@@ -206,7 +207,7 @@ export default function AppPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Dossier_EverT_${dossier.nom.replace(/\s+/g, '_')}.pptx`
+      a.download = buildDossierFilename(dossier, 'pptx')
       a.click()
       URL.revokeObjectURL(url)
       toast.success('Fichier Google Slides téléchargé !')

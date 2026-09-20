@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import { OAuth2Client } from 'google-auth-library'
+import { buildDossierFilename } from './filename-utils.js'
 
 function getSession(req) {
   const cookie = req.cookies?.evert_session
@@ -33,9 +34,7 @@ export default async function handler(req, res) {
 
     const drive = google.drive({ version: 'v3', auth })
 
-    const date = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')
-    const safeName = dossier.nom.replace(/["]/g, '').trim()
-    const fileName = `Dossier EverT — ${safeName} — ${date}.pptx`
+    const fileName = buildDossierFilename(dossier, 'pptx')
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
 
     const { Readable } = await import('stream')
