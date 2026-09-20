@@ -34,24 +34,26 @@ export default async function handler(req, res) {
 
     const drive = google.drive({ version: 'v3', auth })
 
-    const fileName = buildDossierFilename(dossier, 'pptx')
+    // Pas d'extension : le fichier devient une présentation Google Slides native
+    const fileName = buildDossierFilename(dossier)
     const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
 
     const { Readable } = await import('stream')
     const stream = Readable.from(pptxBuffer)
 
-    // 1. Upload PPTX natif
+    // 1. Upload du PPTX, converti à la volée en Google Slides natif
+    //    (mimeType cible = google-apps.presentation, source = pptx)
     const file = await drive.files.create({
       requestBody: {
         name: fileName,
-        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        mimeType: 'application/vnd.google-apps.presentation',
         ...(folderId ? { parents: [folderId] } : {})
       },
       media: {
         mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         body: stream
       },
-      fields: 'id, name'
+      fields: 'id, name, mimeType, webViewLink'
     })
 
     const fileId = file.data.id
@@ -79,8 +81,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. Retourner le lien Drive
-    const viewUrl = `https://drive.google.com/file/d/${fileId}/view`
+    // 3. Retourner le lien : présentation Slides éditable si la conversion a réussi
+    const isSlides = file.data.mimeType === 'application/vnd.google-apps.presentation'
+    const viewUrl = file.data.webViewLink
+      || (isSlides
+        ? `https://docs.google.com/presentation/d/${fileId}/edit`
+        : `https://drive.google.com/file/d/${fileId}/view`)
 
     res.json({
       success: true,
