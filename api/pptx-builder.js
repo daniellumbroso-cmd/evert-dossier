@@ -17,8 +17,21 @@ const LIGHT = 'fafaf8'
 const W = 7.5
 const H = 10.61
 
-// Google Slides ignore bullet:true — il faut un caractère explicite (● U+25CF)
-const BULLET = { code: '25CF' }
+// Google Slides ignore bullet:true — il faut un caractère explicite (● U+25CF).
+// indent = écart puce/texte en pt (défaut PptxGenJS : 27pt, trop large ici).
+const BULLET = { code: '25CF', indent: 12 }
+
+// Une ligne à puce contenant du **gras** est découpée en plusieurs runs, et
+// PptxGenJS piège des deux côtés :
+//  - il écrit un <a:pPr> PAR run : si seul le premier porte la puce, le
+//    <a:buNone/> des runs suivants l'écrase (puce invisible dans Slides) ;
+//  - mais un run porteur de `bullet` ouvre un NOUVEAU paragraphe, donc poser
+//    la puce sur tous les runs donne une puce par fragment.
+// Parade : la lib teste `align` avant `bullet` pour décider d'un saut de
+// paragraphe, et ne coupe que si l'alignement CHANGE. Un `align` identique sur
+// tous les runs neutralise donc le découpage, et la puce peut être portée
+// partout → un seul paragraphe, un pPr cohérent, une seule puce.
+const BULLET_RUN = { bullet: BULLET, align: 'left' }
 
 // Parse **gras** en rich text PptxGenJS
 function parseRichText(text, baseOpts = {}) {
@@ -108,12 +121,9 @@ function addResumeSlide(pres, d) {
       ]
     }
   })
-  const expRuns = expItems.flatMap((item, i) => {
-    const runs = item.richText
-    // Ajouter bullet sur premier run
-    runs[0].options.bullet = BULLET
-    return runs
-  })
+  const expRuns = expItems.flatMap(item =>
+    item.richText.map(r => ({ ...r, options: { ...r.options, ...BULLET_RUN } }))
+  )
   slide.addText(expRuns, { x: 0.5, y, w: W - 0.9, h: 1.1 })
   y += 1.1
 
@@ -122,8 +132,8 @@ function addResumeSlide(pres, d) {
   y += 0.55
 
   const techItems = d.competences_techniques.map((cat, i) => [
-    { text: cat.categorie + ' : ', options: { bullet: BULLET, bold: true, fontSize: 9.5, color: BLUE, fontFace: 'Montserrat' } },
-    { text: cat.items.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: i < d.competences_techniques.length - 1, paraSpaceAfter: 10 } }
+    { text: cat.categorie + ' : ', options: { ...BULLET_RUN, bold: true, fontSize: 9.5, color: BLUE, fontFace: 'Montserrat' } },
+    { text: cat.items.join(', '), options: { ...BULLET_RUN, bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: i < d.competences_techniques.length - 1, paraSpaceAfter: 10 } }
   ]).flat()
   slide.addText(techItems, { x: 0.5, y, w: W - 0.9, h: 1.5 })
 }
@@ -219,7 +229,7 @@ function _renderExpSlide(pres, exp, isContinued) {
     parts.forEach((p, i) => {
       runs.push({
         text: p.text,
-        options: { ...p.options, bullet: i === 0 ? BULLET : false, breakLine: i === parts.length - 1, paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0 }
+        options: { ...p.options, ...BULLET_RUN, breakLine: i === parts.length - 1, paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0 }
       })
     })
   }
@@ -239,7 +249,7 @@ function _renderExpSlide(pres, exp, isContinued) {
         text: p.text,
         options: {
           ...p.options,
-          bullet: i === 0 ? BULLET : false,
+          ...BULLET_RUN,
           breakLine: i === parts.length - 1,
           paraSpaceAfter: i === parts.length - 1 ? spaceAfter : 0,
         }
