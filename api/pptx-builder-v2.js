@@ -511,21 +511,27 @@ function addEcosystem(pres, d) {
   let y = 0.52
 
   y += eyebrow(slide, 'ever"T · WOLD · European Digital Group', ML, y, PURPLE, 8)
-  slide.addText('250 TALENTS,\nUN GROUPE EUROPÉEN', {
-    x: ML, y: y + 0.04, w: CW, h: 0.92, fontSize: 25, fontFace: MONT, bold: true,
+  slide.addText('250 TALENTS EVER"T,\n2 600 DANS LE GROUPE', {
+    x: ML, y: y + 0.04, w: CW, h: 0.92, fontSize: 24, fontFace: MONT, bold: true,
     color: WHITE, valign: 'top', lineSpacingMultiple: LS.head })
   y += 1.18
 
   // Bandeau de marques
-  const bh = 0.95
+  const bh = 0.8
   slide.addShape('roundRect', { x: ML, y, w: CW, h: bh, rectRadius: 0.14,
     fill: { color: BLUE, transparency: 90 }, line: { color: 'FFFFFF', width: 0.75, transparency: 84 } })
-  logo(slide, 'v2_logo_evert.png', ML + 0.55, y + 0.31, 1.32)
-  slide.addShape('rect', { x: ML + 2.35, y: y + 0.3, w: 0.008, h: 0.36, fill: { color: 'FFFFFF', transparency: 78 }, line: { type: 'none' } })
-  logo(slide, 'v2_logo_wold.png', ML + 2.78, y + 0.38, 0.92)
-  slide.addShape('rect', { x: ML + 4.15, y: y + 0.3, w: 0.008, h: 0.36, fill: { color: 'FFFFFF', transparency: 78 }, line: { type: 'none' } })
-  logo(slide, 'v2_logo_edg.png', ML + 4.62, y + 0.33, 0.72)
-  y += bh + 0.5
+  logo(slide, 'v2_logo_evert.png', ML + 0.55, y + 0.26, 1.2)
+  slide.addShape('rect', { x: ML + 2.35, y: y + 0.24, w: 0.008, h: 0.32, fill: { color: 'FFFFFF', transparency: 78 }, line: { type: 'none' } })
+  logo(slide, 'v2_logo_wold.png', ML + 2.82, y + 0.32, 0.84)
+  slide.addShape('rect', { x: ML + 4.15, y: y + 0.24, w: 0.008, h: 0.32, fill: { color: 'FFFFFF', transparency: 78 }, line: { type: 'none' } })
+  logo(slide, 'v2_logo_edg.png', ML + 4.65, y + 0.28, 0.66)
+  y += bh + 0.44
+
+  logo(slide, 'v2_logo_evert.png', ML, y + 0.02, 0.78)
+  slide.addText('CONSEIL TECH, DATA.IA & PRODUCT', {
+    x: ML + 0.96, y: y + 0.04, w: CW - 0.96, h: 0.2, fontSize: 7, fontFace: MONT,
+    bold: true, color: GDARK, charSpacing: 1.3, valign: 'middle' })
+  y += 0.36
 
   const lead = '**250 talents** en conseil Tech, Data.IA et Product. Une communauté tech IA-native, bâtie sur l\'apprentissage continu.'
   let h = textHeight(lead, 11.5, CW) + 0.1
@@ -544,6 +550,12 @@ function addEcosystem(pres, d) {
   rule(slide, ML, y, CW, 'FFFFFF', 80)
   y += 0.42
 
+  logo(slide, 'v2_logo_edg.png', ML, y + 0.01, 0.5)
+  slide.addText('EUROPEAN DIGITAL GROUP — LE GROUPE AUQUEL NOUS APPARTENONS', {
+    x: ML + 0.68, y, w: CW - 0.68, h: 0.2, fontSize: 7, fontFace: MONT,
+    bold: true, color: GDARK, charSpacing: 1.3, valign: 'middle' })
+  y += 0.38
+
   const stats = [['2600', 'talents'], ['1800', 'clients'], ['320', 'm€ de revenus 2025']]
   stats.forEach(([v, l], i) => {
     const x = ML + i * 1.75
@@ -554,9 +566,8 @@ function addEcosystem(pres, d) {
   })
   y += 0.86
 
-  const edg = 'À l\'échelle d\'**European Digital Group**. Le groupe porte un **Centre d\'Excellence IA** : ' +
-    'il identifie les cas d\'usage à fort impact, fédère les expertises des filiales et diffuse les méthodes. ' +
-    'Nos consultants en bénéficient directement.'
+  const edg = 'Le groupe porte un **Centre d\'Excellence IA** : il identifie les cas d\'usage à fort impact, ' +
+    'fédère les expertises des filiales et diffuse les méthodes. Nos consultants en bénéficient directement.'
   h = textHeight(edg, 9, CW, null, LS.airy) + 0.1
   slide.addText(parseRichText(edg, { fontSize: 9, fontFace: MONT, color: SOFT }),
     { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: LS.airy })
