@@ -138,79 +138,30 @@ function addResumeSlide(pres, d) {
   slide.addText(techItems, { x: 0.5, y, w: W - 0.9, h: 1.5 })
 }
 
-function countExpPoints(exp) {
-  let count = 0
-  if (exp.sub_roles) {
-    exp.sub_roles.forEach(sub => sub.activites?.forEach(act => { count += act.points?.length || 0 }))
-  } else {
-    exp.activites?.forEach(act => { count += act.points?.length || 0 })
-  }
-  count += (exp.enjeux?.length || 0) + (exp.resultats?.length || 0)
-  return count
-}
+// --- Mise en page des slides d'expérience -----------------------------------
+// Objectif : UNE expérience = UNE page, sauf si le contenu déborde vraiment.
+// On estime donc la hauteur rendue et on choisit la densité la moins serrée
+// qui tient dans la page ; on ne coupe que si même la plus dense déborde.
 
-function addExperienceSlide(pres, exp) {
-  const pointCount = countExpPoints(exp)
-  const needsSplit = pointCount > 18
+const EXP_BODY_W = W - 0.5        // largeur de la zone de texte
+const EXP_BODY_H = H - 1.85       // hauteur disponible sous le titre
+const TEXT_INSET = 0.2            // marges internes PptxGenJS (0.1" de chaque côté)
+const CHAR_W_EM = 0.58            // largeur moyenne d'un glyphe Montserrat, en em
+const LINE_H_EM = 1.22            // interligne
+const FIT_MARGIN = 0.96           // garde au cas où l'estimation soit optimiste
 
-  if (needsSplit && exp.sub_roles && exp.sub_roles.length > 1) {
-    // Split sur les sub_roles : 1er sub_role(s) sur slide 1, reste sur slide 2
-    const mid = Math.ceil(exp.sub_roles.length / 2)
-    const exp1 = { ...exp, sub_roles: exp.sub_roles.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
-    const exp2 = { ...exp, sub_roles: exp.sub_roles.slice(mid), projet: null }
-    _renderExpSlide(pres, exp1, true)
-    _renderExpSlide(pres, exp2, false)
-  } else if (needsSplit && exp.activites && exp.activites.length >= 2) {
-    // Split sur les activites : couper en 2 groupes de thèmes
-    const mid = Math.ceil(exp.activites.length / 2)
-    const exp1 = { ...exp, activites: exp.activites.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
-    const exp2 = { ...exp, activites: exp.activites.slice(mid), projet: null }
-    _renderExpSlide(pres, exp1, true)
-    _renderExpSlide(pres, exp2, false)
-  } else if (needsSplit && exp.sub_roles && exp.sub_roles.length === 1) {
-    // 1 seul sub_role très long : split ses activites
-    const sub = exp.sub_roles[0]
-    const mid = Math.ceil((sub.activites?.length || 0) / 2)
-    const sub1 = { ...sub, activites: sub.activites?.slice(0, mid) }
-    const sub2 = { ...sub, activites: sub.activites?.slice(mid) }
-    const exp1 = { ...exp, sub_roles: [sub1], enjeux: [], resultats: [], env_technique: [] }
-    const exp2 = { ...exp, sub_roles: [sub2], projet: null }
-    _renderExpSlide(pres, exp1, true)
-    _renderExpSlide(pres, exp2, false)
-  } else {
-    _renderExpSlide(pres, exp, false)
-  }
-}
+// Densités, de la plus lisible à la plus serrée.
+const EXP_TIERS = [
+  { fSize: 9.5, spaceAfter: 8, spaceBr: 10, sectionFSize: 10.5, sectionSpaceBefore: 8 },
+  { fSize: 8.5, spaceAfter: 4, spaceBr: 5, sectionFSize: 9.5, sectionSpaceBefore: 4 },
+  { fSize: 8, spaceAfter: 2, spaceBr: 3, sectionFSize: 9, sectionSpaceBefore: 4 },
+  { fSize: 7.5, spaceAfter: 1, spaceBr: 2, sectionFSize: 8.5, sectionSpaceBefore: 3 }
+]
 
-function _renderExpSlide(pres, exp, isContinued) {
-  const slide = pres.addSlide()
-  slide.background = { color: LIGHT }
-
-  const pointCount = countExpPoints(exp)
-  const isCompact = pointCount > 10
-  const isDense = pointCount > 16
-  const fSize = isDense ? 8 : isCompact ? 8.5 : 9.5
-  const spaceAfter = isDense ? 1 : isCompact ? 4 : 8
-  const spaceBr = isDense ? 2 : isCompact ? 5 : 10
-  const sectionFSize = isDense ? 9 : isCompact ? 9.5 : 10.5
-
-  slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })
-
-  const iconPath = path.join(process.cwd(), 'template_assets', 'favicon_icon.png')
-  if (fs.existsSync(iconPath)) {
-    slide.addImage({ path: iconPath, x: 0.5, y: 0.6, w: 0.25, h: 0.25 })
-  }
-
-  const titleSuffix = isContinued ? ' (suite)' : ''
-  slide.addText(exp.entreprise + ' | ' + exp.role + (exp.stack ? ' ' + exp.stack : '') + titleSuffix, {
-    x: 0.85, y: 0.52, w: W - 1.0, h: 0.5,
-    fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
-  })
-  slide.addText(exp.dates, {
-    x: 0.3, y: 1.05, w: W - 0.5, h: 0.25,
-    fontSize: 10, color: BLUE, fontFace: 'Montserrat', italic: true
-  })
-
+// Construit les runs du corps de slide pour une densité donnée.
+// Sert au rendu ET à la mesure : les deux ne peuvent donc pas diverger.
+function buildExpRuns(exp, tier) {
+  const { fSize, spaceAfter, spaceBr, sectionFSize, sectionSpaceBefore } = tier
   const runs = []
   const br = () => runs.push({ text: ' ', options: { breakLine: true, fontSize: 4, fontFace: 'Montserrat', color: BLACK, paraSpaceAfter: spaceBr } })
   const line = (text, opts = {}) => {
@@ -234,7 +185,7 @@ function _renderExpSlide(pres, exp, isContinued) {
     })
   }
   const sectionTitle = (text) => {
-    runs.push({ text, options: { fontSize: sectionFSize, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: isCompact ? 4 : 8, paraSpaceAfter: spaceAfter } })
+    runs.push({ text, options: { fontSize: sectionFSize, fontFace: 'Montserrat', color: BLACK, bold: true, breakLine: true, paraSpaceBefore: sectionSpaceBefore, paraSpaceAfter: spaceAfter } })
   }
   const subRoleTitle = (text) => {
     runs.push({ text, options: { fontSize: 10, fontFace: 'Montserrat', color: BLUE, bold: true, breakLine: true, paraSpaceBefore: 10, paraSpaceAfter: 4 } })
@@ -269,7 +220,7 @@ function _renderExpSlide(pres, exp, isContinued) {
       sub.activites?.forEach(act => {
         sectionTitle(act.theme)
         if (act.points && act.points.length > 0) {
-          act.points.forEach((pt, i) => bulletRich(pt))
+          act.points.forEach(pt => bulletRich(pt))
         } else if (act.texte) {
           bulletLine(act.texte)
         }
@@ -281,7 +232,7 @@ function _renderExpSlide(pres, exp, isContinued) {
     exp.activites?.forEach(act => {
       sectionTitle(act.theme)
       if (act.points && act.points.length > 0) {
-        act.points.forEach((pt, i) => bulletRich(pt))
+        act.points.forEach(pt => bulletRich(pt))
       } else if (act.texte) {
         bulletLine(act.texte)
       }
@@ -291,13 +242,13 @@ function _renderExpSlide(pres, exp, isContinued) {
 
   if (exp.enjeux?.length) {
     sectionTitle('Enjeux :')
-    exp.enjeux.forEach((e, i) => bulletRich(e))
+    exp.enjeux.forEach(e => bulletRich(e))
     br()
   }
 
   if (exp.resultats?.length) {
     sectionTitle('Résultats :')
-    exp.resultats.forEach((r, i) => bulletRich(r))
+    exp.resultats.forEach(r => bulletRich(r))
     br()
   }
 
@@ -306,10 +257,108 @@ function _renderExpSlide(pres, exp, isContinued) {
     runs.push({ text: exp.env_technique.join(', '), options: { bold: false, fontSize: 9.5, color: BLACK, fontFace: 'Montserrat', breakLine: true } })
   }
 
-  slide.addText(runs, {
+  return runs
+}
+
+// Hauteur rendue estimée, en pouces. Les runs sont regroupés en paragraphes
+// (un paragraphe se termine sur un run `breakLine`), puis on estime le nombre
+// de lignes de chaque paragraphe d'après sa longueur et sa police.
+function estimateRunsHeight(runs) {
+  let total = 0
+  let para = []
+
+  const flush = () => {
+    if (para.length === 0) return
+    const text = para.map(r => r.text || '').join('')
+    const fontSize = Math.max(...para.map(r => r.options?.fontSize || 8))
+    const hasBullet = para.some(r => typeof r.options?.bullet === 'object')
+    const usable = EXP_BODY_W - TEXT_INSET - (hasBullet ? BULLET.indent / 72 : 0)
+    const charsPerLine = Math.max(8, Math.floor(usable / (fontSize * CHAR_W_EM / 72)))
+    const lines = Math.max(1, Math.ceil(text.length / charsPerLine))
+    const spaceBefore = Math.max(...para.map(r => r.options?.paraSpaceBefore || 0))
+    const spaceAfter = Math.max(...para.map(r => r.options?.paraSpaceAfter || 0))
+    total += (lines * fontSize * LINE_H_EM + spaceBefore + spaceAfter) / 72
+    para = []
+  }
+
+  runs.forEach(r => {
+    para.push(r)
+    if (r.options?.breakLine) flush()
+  })
+  flush()
+  return total
+}
+
+// Densité la moins serrée qui tient sur une page, ou null si aucune ne tient.
+function fitExpTier(exp) {
+  return EXP_TIERS.find(tier => estimateRunsHeight(buildExpRuns(exp, tier)) <= EXP_BODY_H * FIT_MARGIN) || null
+}
+
+function addExperienceSlide(pres, exp) {
+  // On ne coupe qu'en dernier recours : une expérience tient sur une page tant
+  // qu'une des densités permet de la faire entrer.
+  const needsSplit = fitExpTier(exp) === null
+
+  if (needsSplit && exp.sub_roles && exp.sub_roles.length > 1) {
+    // Split sur les sub_roles : 1er sub_role(s) sur slide 1, reste sur slide 2
+    const mid = Math.ceil(exp.sub_roles.length / 2)
+    const exp1 = { ...exp, sub_roles: exp.sub_roles.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, sub_roles: exp.sub_roles.slice(mid), projet: null }
+    _renderExpSlide(pres, exp1, true)
+    _renderExpSlide(pres, exp2, false)
+  } else if (needsSplit && exp.activites && exp.activites.length >= 2) {
+    // Split sur les activites : couper en 2 groupes de thèmes
+    const mid = Math.ceil(exp.activites.length / 2)
+    const exp1 = { ...exp, activites: exp.activites.slice(0, mid), enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, activites: exp.activites.slice(mid), projet: null }
+    _renderExpSlide(pres, exp1, true)
+    _renderExpSlide(pres, exp2, false)
+  } else if (needsSplit && exp.sub_roles && exp.sub_roles.length === 1) {
+    // 1 seul sub_role très long : split ses activites
+    const sub = exp.sub_roles[0]
+    const mid = Math.ceil((sub.activites?.length || 0) / 2)
+    const sub1 = { ...sub, activites: sub.activites?.slice(0, mid) }
+    const sub2 = { ...sub, activites: sub.activites?.slice(mid) }
+    const exp1 = { ...exp, sub_roles: [sub1], enjeux: [], resultats: [], env_technique: [] }
+    const exp2 = { ...exp, sub_roles: [sub2], projet: null }
+    _renderExpSlide(pres, exp1, true)
+    _renderExpSlide(pres, exp2, false)
+  } else {
+    _renderExpSlide(pres, exp, false)
+  }
+}
+
+function _renderExpSlide(pres, exp, isContinued) {
+  const slide = pres.addSlide()
+  slide.background = { color: LIGHT }
+
+  slide.addShape('rect', { x: 0, y: 0, w: W, h: 0.05, fill: { color: BLUE }, line: { color: BLUE } })
+
+  const iconPath = path.join(process.cwd(), 'template_assets', 'favicon_icon.png')
+  if (fs.existsSync(iconPath)) {
+    slide.addImage({ path: iconPath, x: 0.5, y: 0.6, w: 0.25, h: 0.25 })
+  }
+
+  const titleSuffix = isContinued ? ' (suite)' : ''
+  slide.addText(exp.entreprise + ' | ' + exp.role + (exp.stack ? ' ' + exp.stack : '') + titleSuffix, {
+    x: 0.85, y: 0.52, w: W - 1.0, h: 0.5,
+    fontSize: 13, color: BLUE, fontFace: 'Montserrat', bold: true, wrap: true
+  })
+  slide.addText(exp.dates, {
+    x: 0.3, y: 1.05, w: W - 0.5, h: 0.25,
+    fontSize: 10, color: BLUE, fontFace: 'Montserrat', italic: true
+  })
+
+  // Après un split, chaque moitié est remesurée et retrouve une densité lisible.
+  const tier = fitExpTier(exp) || EXP_TIERS[EXP_TIERS.length - 1]
+
+  slide.addText(buildExpRuns(exp, tier), {
     x: 0.3, y: 1.7,
-    w: W - 0.5, h: H - 1.85,
-    valign: 'top', wrap: true
+    w: EXP_BODY_W, h: EXP_BODY_H,
+    valign: 'top', wrap: true,
+    // Filet de sécurité : l'estimation de hauteur reste une estimation. Si elle
+    // se trompe, le lecteur réduit le texte au lieu de le laisser déborder.
+    fit: 'shrink'
   })
 }
 
