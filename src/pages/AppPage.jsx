@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth'
 import DossierPreview from '../components/DossierPreview'
 import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search, Send } from 'lucide-react'
 import { buildDossierFilename } from '../../api/filename-utils.js'
+import { extractPdfText, MIN_USABLE_TEXT, MAX_UPLOAD_BYTES } from '../lib/pdfText'
 
 const COMMUNITIES = ['DATA', 'Product', 'Mobile / Dev', 'Web', 'DevOps / Cloud', 'IA / ML']
 
@@ -113,7 +114,22 @@ export default function AppPage() {
       formData.append('format', format)
       if (instructions) formData.append('instructions', instructions)
       if (besoinPourGeneration) formData.append('besoinClient', besoinPourGeneration)
-      if (tab === 'pdf' && pdfFile) formData.append('pdf', pdfFile)
+      if (tab === 'pdf' && pdfFile) {
+        // On extrait le texte ici : le serveur le faisait de toute façon, et
+        // un PDF lourd se fait rejeter par Vercel (413) avant d'y arriver.
+        let texte = ''
+        try { texte = await extractPdfText(pdfFile) } catch { /* PDF illisible : on tentera le fichier */ }
+        if (texte.length >= MIN_USABLE_TEXT) {
+          formData.append('cvText', texte)
+        } else if (pdfFile.size > MAX_UPLOAD_BYTES) {
+          throw new Error(
+            "Ce PDF est un scan et pèse " + (pdfFile.size / 1048576).toFixed(1) +
+            " Mo : il dépasse la limite d'envoi. Réduisez-le (moins de 4 Mo) ou collez le texte du CV."
+          )
+        } else {
+          formData.append('pdf', pdfFile)
+        }
+      }
       if (tab === 'text') formData.append('cvText', cvText)
 
       const response = await fetch('/api/generate', {
@@ -131,7 +147,9 @@ export default function AppPage() {
           errMsg = err.error || errMsg
         } catch {
           // La réponse n'est pas du JSON (ex: timeout Vercel HTML)
-          if (response.status === 504 || response.status === 502) {
+          if (response.status === 413) {
+            errMsg = 'Fichier trop lourd pour être envoyé. Réduisez le PDF ou collez le texte du CV.'
+          } else if (response.status === 504 || response.status === 502) {
             errMsg = 'Délai dépassé — le CV est peut-être trop lourd. Essayez en collant le texte du CV.'
           } else {
             errMsg = `Erreur serveur (${response.status})`

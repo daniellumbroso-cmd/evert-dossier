@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
+import { extractPdfText } from '../lib/pdfText'
 import { Link } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
@@ -372,27 +373,6 @@ export default function MatchPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop, accept: { 'application/pdf': ['.pdf'] }, maxSize: 15 * 1024 * 1024, multiple: false
   })
-
-  // Extraction texte PDF côté navigateur via pdfjs-dist
-  // Pourquoi : Vercel a une limite serverless de 4.5 MB sur le body des requêtes.
-  // Envoyer un PDF de 10 MB directement provoque une erreur 413 "Request Entity Too Large"
-  // (renvoyée en HTML par Vercel, d'où le "Unexpected token 'R' ... is not valid JSON").
-  // On extrait donc le texte localement (~qq KB), on envoie que le texte au serveur.
-  const extractPdfText = async (fileBlob) => {
-    const pdfjs = await import('pdfjs-dist/build/pdf.mjs')
-    // Worker via CDN pour éviter les soucis de bundling
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
-    const arrayBuffer = await fileBlob.arrayBuffer()
-    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise
-    let fullText = ''
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i)
-      const content = await page.getTextContent()
-      const pageText = content.items.map(item => item.str).join(' ')
-      fullText += pageText + '\n\n'
-    }
-    return fullText.trim()
-  }
 
   const analyze = async () => {
     if (!file) return toast.error('Uploade un PDF d\'abord')
