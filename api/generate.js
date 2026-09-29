@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import formidable from 'formidable'
 import fs from 'fs'
 import pdfParse from 'pdf-parse/lib/pdf-parse.js'
+import { getSenderInfo } from './sender.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -136,18 +137,6 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
 
 
 // ── INFOS EXPÉDITEUR pour le mode push ──
-function getSenderInfo(email) {
-  if (email === 'daniel.lumbroso@ever-t.fr') {
-    return { nom: 'Daniel Lumbroso', role: 'Fondateur', signature: 'Daniel' }
-  }
-  if (email === 'quentin.branchet@ever-t.fr') {
-    return { nom: 'Quentin Branchet', role: 'Co-fondateur', signature: 'Quentin' }
-  }
-  const prenom = email.split('.')[0]
-  const p = prenom.charAt(0).toUpperCase() + prenom.slice(1)
-  return { nom: p, role: 'Business Developer', signature: p }
-}
-
 const PUSH_PROMPT = `Tu es un expert en rédaction de mails de prospection commerciale pour ever"T, une ESN tech IA-native, filiale Product & data.iA de WOLD | EDG, avec +160 ingénieurs.
 
 Tu génères des mails "push dossier" : emails courts et percutants envoyés à des prospects LinkedIn pour présenter un consultant ever"T.

@@ -99,23 +99,40 @@ export default function CampaignPage() {
 
   const runWrite = async () => {
     const targets = rows.filter(r => r.selected)
-    setBusy({ label: 'Rédaction des mails', done: 0, total: targets.length })
+    setBusy({ label: 'Lecture de votre agenda', done: 0, total: targets.length })
     const byId = new Map(rows.map(r => [r.id, { ...r }]))
+    let failed = 0
     try {
+      // Trois créneaux libres par mail, qui tournent d'un prospect à l'autre.
+      // Sans agenda lisible, les mails partent sans créneaux et demandent les disponibilités.
+      let slots = null
+      try {
+        const res = await postCampaign({ action: 'slots', count: targets.length })
+        slots = res.assignments
+        if (!slots) toast(res.message || 'Agenda indisponible : mails rédigés sans créneaux', { icon: '📅', duration: 8000 })
+      } catch (e) {
+        toast(`Agenda indisponible (${e.message}) : mails rédigés sans créneaux`, { icon: '📅', duration: 8000 })
+      }
+
+      setBusy({ label: 'Rédaction des mails', done: 0, total: targets.length })
       for (let i = 0; i < targets.length; i += WRITE_CHUNK) {
-        const chunk = targets.slice(i, i + WRITE_CHUNK).map(r => ({
+        const chunk = targets.slice(i, i + WRITE_CHUNK).map((r, k) => ({
           id: r.id, prenom: r.prenom, nom: r.nom, poste: r.poste, technologies: r.technologies,
-          profils: r.profils, entreprise: r.check?.company?.name || r.entreprise
+          profils: r.profils, entreprise: r.check?.company?.name || r.entreprise,
+          creneaux: slots?.[i + k] || []
         }))
         const { emails } = await postCampaign({ action: 'write', rows: chunk, dossier })
         for (const m of emails) {
           const r = byId.get(m.id)
-          if (r) r.mail = { objet: m.objet, corps: m.corps }
+          if (!r) continue
+          if (m.corps) r.mail = { objet: m.objet, corps: m.corps }
+          else failed++
         }
         setRows([...byId.values()])
         setBusy(b => ({ ...b, done: Math.min(b.total, i + chunk.length) }))
       }
-      toast.success('Mails rédigés')
+      if (failed) toast.error(`${failed} mail(s) non rédigé(s) : relancez la rédaction`)
+      else toast.success('Mails rédigés')
     } catch (e) {
       toast.error(e.message)
     } finally {
@@ -123,7 +140,6 @@ export default function CampaignPage() {
     }
   }
 
-  const toggle = (id) => setRows(rs => rs.map(r => r.id === id ? { ...r, selected: !r.selected } : r))
   const editMail = (id, field, value) =>
     setRows(rs => rs.map(r => r.id === id ? { ...r, mail: { ...r.mail, [field]: value } } : r))
 
@@ -319,7 +335,7 @@ export default function CampaignPage() {
               </table>
             </div>
             <p style={{ fontSize: 11, color: '#999', margin: '12px 0 0' }}>
-              Sont décochés par défaut : les clients actifs, et les contacts touchés dans Boond ces 60 derniers jours.
+              Sont décochés par défaut : les clients actifs, et les contacts touchés dans Boond ces 60 derniers jours. Les créneaux proposés dans les mails sont pris dans vos disponibilités Google Agenda (6 prochains jours ouvrés) et varient d'un mail à l'autre.
               Tu peux recocher une ligne si tu sais pourquoi.
             </p>
           </section>

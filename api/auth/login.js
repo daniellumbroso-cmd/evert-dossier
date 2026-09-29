@@ -12,7 +12,9 @@ export default function handler(req, res) {
     scope: [
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/drive.file'
+      'https://www.googleapis.com/auth/drive.file',
+      // Disponibilités seulement (pas le contenu des rendez-vous) : créneaux des mails push
+      'https://www.googleapis.com/auth/calendar.freebusy'
     ],
     prompt: 'consent'
   })
