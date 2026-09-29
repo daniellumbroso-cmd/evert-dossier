@@ -11,6 +11,9 @@
     },
     "api/export-pptx.js": {
       "maxDuration": 30
+    },
+    "api/campaign.js": {
+      "maxDuration": 300
     }
   },
   "rewrites": [

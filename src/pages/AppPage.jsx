@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
@@ -7,6 +7,7 @@ import DossierPreview from '../components/DossierPreview'
 import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search, Send } from 'lucide-react'
 import { buildDossierFilename } from '../../api/filename-utils.js'
 import { extractPdfText, MIN_USABLE_TEXT, MAX_UPLOAD_BYTES } from '../lib/pdfText'
+import { CAMPAIGN_STORAGE_KEY } from '../lib/campaign'
 
 const COMMUNITIES = ['DATA', 'Product', 'Mobile / Dev', 'Web', 'DevOps / Cloud', 'IA / ML']
 
@@ -20,6 +21,7 @@ const STEPS = [
 
 export default function AppPage() {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [tab, setTab] = useState('pdf') // 'pdf' | 'text'
   const [pdfFile, setPdfFile] = useState(null)
   const [cvText, setCvText] = useState('')
@@ -851,6 +853,21 @@ export default function AppPage() {
                     {saving ? '⏳ Sauvegarde...' : '☁️ Sauvegarder dans Drive'}
                   </button>
                 )}
+                {/* Campagne push : ce dossier poussé à toute une liste de prospects */}
+                <button
+                  onClick={() => {
+                    sessionStorage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(dossier))
+                    navigate('/campagne')
+                  }}
+                  style={{
+                    padding: '9px 16px', borderRadius: 8, border: '1.5px solid #1400FF',
+                    background: 'transparent', cursor: 'pointer',
+                    fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
+                    color: '#1400FF', display: 'flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  📣 Campagne push
+                </button>
                 {/* Bouton Mail Push avec badge */}
                 <button
                   onClick={() => { setShowPushPanel(!showPushPanel) }}

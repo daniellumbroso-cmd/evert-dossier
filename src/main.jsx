@@ -8,6 +8,8 @@ import AppPage from './pages/AppPage'
 import SearchPage from './pages/SearchPage'
 import DebugBoondPage from './pages/DebugBoondPage'
 import MatchPage from './pages/MatchPage'
+// Chargée à la demande : elle embarque les bibliothèques Excel
+const CampaignPage = React.lazy(() => import('./pages/CampaignPage'))
 import ProtectedRoute from './components/ProtectedRoute'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -51,6 +53,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/match" element={
           <ProtectedRoute>
             <MatchPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/campagne" element={
+          <ProtectedRoute>
+            <React.Suspense fallback={null}><CampaignPage /></React.Suspense>
           </ProtectedRoute>
         } />
         {/* Ancienne URL /push → redirige vers /match (compatibilité favoris) */}
