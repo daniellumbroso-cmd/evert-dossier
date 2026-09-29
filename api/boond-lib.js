@@ -41,17 +41,30 @@ export function boondFromEnv() {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   }
-  return {
-    async get(path) {
-      try {
-        const r = await fetch(`${apiUrl}${path}`, { headers })
-        if (r.status !== 200) return { status: r.status, body: null }
-        return { status: 200, body: await r.json() }
-      } catch (e) {
-        return { status: 0, body: null, error: e.message }
-      }
+  const send = async (method, path, body) => {
+    try {
+      const r = await fetch(`${apiUrl}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })
+      let json = null
+      try { json = await r.json() } catch { /* corps vide */ }
+      return r.ok ? { status: r.status, body: json } : { status: r.status, body: null, error: boondError(json, r.status) }
+    } catch (e) {
+      return { status: 0, body: null, error: e.message }
     }
   }
+  return {
+    async get(path) {
+      const r = await send('GET', path)
+      return r.status === 200 ? r : { status: r.status, body: null, error: r.error }
+    },
+    post: (path, body) => send('POST', path, body)
+  }
+}
+
+// Erreurs JSON:API de Boond → une phrase lisible (« 1002 - Wrong or missing attribute (/data/attributes/lastName) »).
+function boondError(json, status) {
+  const errs = Array.isArray(json?.errors) ? json.errors : []
+  if (!errs.length) return `Boond a répondu ${status}`
+  return errs.map(e => [e.code, e.detail || e.title].filter(Boolean).join(' - ') + (e.source?.pointer ? ` (${e.source.pointer})` : '')).join(' ; ')
 }
 
 export const boondUrl = (kind, id) => `https://ui.boondmanager.com/${kind}/${id}/information`
@@ -88,7 +101,7 @@ function companyFromPoste(poste) {
 export async function findContact(boond, row) {
   const emailsOf = (a) => [a.email1, a.email2, a.email3, a.email].filter(Boolean).map(norm)
   if (row.email) {
-    const r = await boond.get(`/contacts?${qs({ keywords: row.email, maxResults: '10' })}`)
+    const r = await boond.get(`/contacts?${qs({ keywords: row.email, keywordsType: 'emails', maxResults: '10' })}`)
     const hit = (r.body?.data || []).find(c => emailsOf(c.attributes || {}).includes(norm(row.email)))
     if (hit) return { id: hit.id, how: 'email' }
   }
@@ -163,3 +176,123 @@ export async function lastContactAction(boond, contactId) {
   actions.sort((x, y) => new Date(y.date) - new Date(x.date))
   return actions[0] || null
 }
+
+// ── Écriture et recherches complémentaires (synchro Gmail → Boond) ───────────
+
+const emailsOf = (a) => [a.email1, a.email2, a.email3, a.email].filter(Boolean).map(norm)
+const fullName = (a) => `${a?.firstName || ''} ${a?.lastName || ''}`.trim()
+
+// Contact CRM ou candidat dont l'une des adresses est exactement `email`.
+export async function findPersonByEmail(boond, email) {
+  for (const [kind, path] of [['contact', '/contacts'], ['candidate', '/candidates']]) {
+    const r = await boond.get(`${path}?${qs({ keywords: email, keywordsType: 'emails', maxResults: '5' })}`)
+    const hit = (r.body?.data || []).find(p => emailsOf(p.attributes || {}).includes(norm(email)))
+    if (hit) {
+      return {
+        kind, id: hit.id, name: fullName(hit.attributes),
+        companyId: hit.relationships?.company?.data?.id || null,
+        url: boondUrl(kind === 'contact' ? 'contacts' : 'candidates', hit.id)
+      }
+    }
+  }
+  return null
+}
+
+// Le bizdev dans Boond (une « ressource »), pour en faire le responsable.
+export async function findResourceByEmail(boond, email) {
+  if (!email) return null
+  const r = await boond.get(`/resources?${qs({ keywords: email, keywordsType: 'emails', maxResults: '5' })}`)
+  const hit = (r.body?.data || []).find(p => emailsOf(p.attributes || {}).includes(norm(email)))
+  return hit ? hit.id : null
+}
+
+// Actions d'un contact ou d'un candidat : [{ date, text }] (texte sans HTML).
+export async function personActions(boond, kind, id) {
+  const r = await boond.get(`/${kind === 'contact' ? 'contacts' : 'candidates'}/${id}/actions?maxResults=50`)
+  return (r.body?.data || []).map(a => {
+    const at = a.attributes || {}
+    return {
+      date: at.startDate || at.date || at.creationDate || '',
+      text: htmlToText(typeof at.text === 'object' ? at.text?.html : at.text)
+    }
+  })
+}
+
+const htmlToText = (h) => String(h || '')
+  .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div)>/gi, '\n').replace(/<[^>]*>/g, ' ')
+  .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+  .replace(/[ \t]+/g, ' ').trim()
+
+// Texte brut → HTML des notes Boond (le champ `text` d'une action est du HTML).
+export const textToHtml = (t) => '<div>' + String(t || '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/\n/g, '<br>') + '</div>'
+
+// Types d'action de l'instance (setting.action.contact / .candidate), repérés par
+// leur libellé : les IDs varient d'une instance Boond à l'autre.
+export async function actionTypes(boond) {
+  const r = await boond.get('/application/dictionary')
+  const action = r.body?.data?.setting?.action || {}
+  const list = (x) => Array.isArray(x) ? x : Object.entries(x || {}).map(([id, v]) => ({ id, value: typeof v === 'string' ? v : v?.value }))
+  const pick = (items, re) => items.find(i => re.test(norm(i.value)))?.id
+  const out = {}
+  for (const kind of ['contact', 'candidate']) {
+    const items = list(action[kind])
+    out[kind] = {
+      note: pick(items, /^note/) ?? pick(items, /note/),
+      email: pick(items, /^e-?mail/) ?? pick(items, /mail/) ?? pick(items, /^note/) ?? pick(items, /note/),
+      labels: items.map(i => i.value)
+    }
+  }
+  return out
+}
+
+// Date au format attendu par Boond, en heure de Paris : 2026-09-29T16:05:00+0200
+export function boondDate(date = new Date()) {
+  const d = new Date(date)
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).formatToParts(d).map(p => [p.type, p.value]))
+  const local = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second)
+  const off = Math.round((local - Math.floor(d.getTime() / 1000) * 1000) / 60000)
+  const sign = off >= 0 ? '+' : '-'
+  const hh = String(Math.floor(Math.abs(off) / 60)).padStart(2, '0'), mm = String(Math.abs(off) % 60).padStart(2, '0')
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${sign}${hh}${mm}`
+}
+
+const rel = (id, type) => ({ data: { id: String(id), type } })
+const createdId = (r) => (Array.isArray(r.body?.data) ? r.body.data[0] : r.body?.data)?.id
+
+async function create(boond, path, data) {
+  const r = await boond.post(path, { data })
+  const id = createdId(r)
+  if (!id) throw new Error(`Création Boond refusée (${path}) : ${r.error || 'réponse vide'}`)
+  return id
+}
+
+export const createCompany = (boond, { name, website, managerId }) => create(boond, '/companies', {
+  type: 'company',
+  attributes: { name, ...(website ? { website } : {}) },
+  ...(managerId ? { relationships: { mainManager: rel(managerId, 'resource') } } : {})
+})
+
+export const createContact = (boond, { firstName, lastName, email, title, companyId, managerId }) => create(boond, '/contacts', {
+  type: 'contact',
+  attributes: { firstName, lastName, ...(email ? { email1: email } : {}), ...(title ? { title } : {}) },
+  relationships: {
+    ...(companyId ? { company: rel(companyId, 'company') } : {}),
+    ...(managerId ? { mainManager: rel(managerId, 'resource') } : {})
+  }
+})
+
+// Une action se rattache toujours à une personne (dependsOn), jamais à une société seule.
+export const createAction = (boond, { kind, personId, companyId, typeOf, text, date, managerId }) => create(boond, '/actions', {
+  type: 'action',
+  attributes: { typeOf: Number(typeOf), text: textToHtml(text), startDate: boondDate(date) },
+  relationships: {
+    dependsOn: rel(personId, kind),
+    ...(companyId && kind === 'contact' ? { company: rel(companyId, 'company') } : {}),
+    ...(managerId ? { mainManager: rel(managerId, 'resource') } : {})
+  }
+})

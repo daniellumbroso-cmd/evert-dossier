@@ -14,7 +14,10 @@ export default function handler(req, res) {
       'https://www.googleapis.com/auth/userinfo.profile',
       'https://www.googleapis.com/auth/drive.file',
       // Disponibilités seulement (pas le contenu des rendez-vous) : créneaux des mails push
-      'https://www.googleapis.com/auth/calendar.freebusy'
+      'https://www.googleapis.com/auth/calendar.freebusy',
+      // Campagne push : brouillons Gmail ; synchro Gmail → Boond : lecture des mails envoyés
+      'https://www.googleapis.com/auth/gmail.compose',
+      'https://www.googleapis.com/auth/gmail.readonly'
     ],
     prompt: 'consent'
   })

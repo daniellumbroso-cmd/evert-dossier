@@ -1,17 +1,20 @@
 import React, { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Upload, ShieldCheck, PenLine, Download, ExternalLink } from 'lucide-react'
+import { Upload, ShieldCheck, PenLine, Download, Mail, FileText, RefreshCw } from 'lucide-react'
 import { FIELDS, detectColumns, readProspectFile, toProspects, exportCampaign } from '../lib/spreadsheet'
-import { buildDossierFilename } from '../../api/filename-utils.js'
+import { extractPdfText, MIN_USABLE_TEXT } from '../lib/pdfText'
 
-// Le dossier du consultant arrive depuis le générateur (bouton « Campagne push »).
+// Le consultant vient d'un PDF de dossier déjà produit, ou du générateur
+// (bouton « Campagne push ») qui dépose le dossier structuré ici.
 import { CAMPAIGN_STORAGE_KEY } from '../lib/campaign'
 
 const BLUE = '#1400FF'
 const font = 'Montserrat, sans-serif'
 const CHECK_CHUNK = 8
 const WRITE_CHUNK = 5
+const DRAFT_CHUNK = 5
+const PDF_CHUNK = 2 * 1024 * 1024   // multiple de 256 Ko, exigé par Drive ; loin de la limite Vercel de 4,5 Mo
 
 const VERDICTS = {
   client_actif: { label: 'Client actif', color: '#c62828', bg: '#fdecec', keep: false },
@@ -30,6 +33,27 @@ const STATUS = { active_client: 'Client actif', past_client: 'Ancien client', pr
 
 function loadDossier() {
   try { return JSON.parse(sessionStorage.getItem(CAMPAIGN_STORAGE_KEY) || 'null') } catch { return null }
+}
+
+function profilFromDossier(d) {
+  if (!d) return { prenom: '', nom: '', metier: '', expertise: '' }
+  const prenom = d.prenom || String(d.nom || '').split(' ')[0]
+  // « nom » contient souvent prénom et nom : on retire le prénom, où qu'il soit
+  const nom = String(d.nom || '').split(/\s+/).filter(w => w && w.toLowerCase() !== prenom.toLowerCase()).join(' ')
+  return { prenom, nom, metier: d.metier || d.titre || '', expertise: d.titre_court || d.metier || '' }
+}
+
+const cleanName = (s) => String(s || '').replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim()
+// Nom de la pièce jointe, au format que la synchro Gmail → Boond sait relire.
+const pdfName = (p) => `Dossier ${cleanName(p.expertise || p.metier)} — ${cleanName(`${p.prenom} ${p.nom}`)}.pdf`
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '')
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
 }
 
 async function postCampaign(body) {
@@ -54,6 +78,9 @@ const btn = (primary, disabled) => ({
 
 export default function CampaignPage() {
   const [dossier] = useState(loadDossier)
+  const [profil, setProfil] = useState(() => profilFromDossier(loadDossier()))
+  const [pdf, setPdf] = useState(null)            // { file, text, fileId }
+  const [readingPdf, setReadingPdf] = useState(false)
   const [file, setFile] = useState(null)
   const [sheet, setSheet] = useState(null)        // { headers, data }
   const [mapping, setMapping] = useState({})
@@ -63,6 +90,27 @@ export default function CampaignPage() {
 
   const selected = rows.filter(r => r.selected)
   const checked = rows.length > 0 && rows.every(r => r.check)
+  const consultantReady = !!(dossier || pdf?.text) && !!profil.prenom && !!profil.metier
+  const draftable = selected.filter(r => r.mail && r.email && !r.draft?.id)
+
+  const onPdf = async (f) => {
+    if (!f) return
+    if (!/\.pdf$/i.test(f.name)) return toast.error('Le dossier doit être un PDF')
+    setReadingPdf(true)
+    try {
+      const text = await extractPdfText(f)
+      if (!dossier && text.length < MIN_USABLE_TEXT) throw new Error('PDF sans texte lisible (image scannée ?)')
+      setPdf({ file: f, text, fileId: null })
+      if (!dossier) {
+        const { profil: p } = await postCampaign({ action: 'profile', dossierText: text, fileName: f.name })
+        setProfil(p)
+      }
+    } catch (e) {
+      toast.error('Dossier illisible : ' + e.message)
+    } finally {
+      setReadingPdf(false)
+    }
+  }
 
   const onFile = async (f) => {
     if (!f) return
@@ -127,7 +175,10 @@ export default function CampaignPage() {
           profils: r.profils, entreprise: r.check?.company?.name || r.entreprise,
           creneaux: slots?.[i + k] || []
         }))
-        const { emails } = await postCampaign({ action: 'write', rows: chunk, dossier })
+        const source = dossier
+          ? { dossier: { ...dossier, prenom: profil.prenom || dossier.prenom, metier: profil.metier || dossier.metier } }
+          : { dossierText: pdf.text, profil }
+        const { emails } = await postCampaign({ action: 'write', rows: chunk, ...source })
         for (const m of emails) {
           const r = byId.get(m.id)
           if (!r) continue
@@ -146,11 +197,64 @@ export default function CampaignPage() {
     }
   }
 
+  // Le PDF part une fois sur le Drive du bizdev (par morceaux), puis chaque
+  // brouillon Gmail le reprend en pièce jointe.
+  const uploadPdf = async () => {
+    if (pdf.fileId) return pdf.fileId
+    const file = pdf.file
+    const { uploadUrl } = await postCampaign({ action: 'pdf-start', name: pdfName(profil), size: file.size })
+    let fileId = null
+    for (let offset = 0; offset < file.size; offset += PDF_CHUNK) {
+      const data = await blobToBase64(file.slice(offset, offset + PDF_CHUNK))
+      const r = await postCampaign({ action: 'pdf-chunk', uploadUrl, offset, total: file.size, data })
+      if (r.done) fileId = r.fileId
+    }
+    if (!fileId) throw new Error('Envoi du PDF inachevé')
+    setPdf(p => ({ ...p, fileId }))
+    return fileId
+  }
+
+  const runDrafts = async () => {
+    const targets = draftable
+    setBusy({ label: 'Envoi du dossier PDF sur votre Drive', done: 0, total: targets.length })
+    const byId = new Map(rows.map(r => [r.id, { ...r }]))
+    let failed = 0
+    try {
+      const pdfFileId = await uploadPdf()
+      setBusy({ label: 'Création des brouillons Gmail', done: 0, total: targets.length })
+      const consultant = { nomComplet: `${profil.prenom} ${profil.nom}`.trim(), expertise: profil.expertise || profil.metier }
+      for (let i = 0; i < targets.length; i += DRAFT_CHUNK) {
+        const chunk = targets.slice(i, i + DRAFT_CHUNK).map(r => ({
+          id: r.id, email: r.email, objet: r.mail.objet, corps: r.mail.corps,
+          prenom: r.prenom, nom: r.nom, poste: r.poste,
+          entreprise: r.check?.company?.name || r.entreprise,
+          entrepriseDeduite: !r.entreprise && r.check?.company?.how !== 'contact',
+          boondCompanyId: r.check?.company?.id || null, boondContactId: r.check?.contact?.id || null
+        }))
+        const { results } = await postCampaign({ action: 'drafts', pdfFileId, rows: chunk, consultant })
+        for (const res of results) {
+          const r = byId.get(res.id)
+          if (!r) continue
+          r.draft = res.draftId ? { id: res.draftId } : { error: res.error }
+          if (!res.draftId) failed++
+        }
+        setRows([...byId.values()])
+        setBusy(b => ({ ...b, done: Math.min(b.total, i + chunk.length) }))
+      }
+      if (failed) toast.error(`${failed} brouillon(s) non créé(s) : voir la colonne Mail`)
+      else toast.success('Brouillons créés dans Gmail')
+    } catch (e) {
+      toast.error(e.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const editMail = (id, field, value) =>
     setRows(rs => rs.map(r => r.id === id ? { ...r, mail: { ...r.mail, [field]: value } } : r))
 
   const onExport = async () => {
-    const who = dossier ? buildDossierFilename(dossier).replace(/^Dossier /, '') : 'campagne'
+    const who = profil.prenom ? pdfName(profil).replace(/^Dossier /, '').replace(/\.pdf$/, '') : 'campagne'
     try { await exportCampaign(rows, `Campagne push — ${who}.xlsx`) }
     catch (e) { toast.error('Export impossible : ' + e.message) }
   }
@@ -161,22 +265,41 @@ export default function CampaignPage() {
     <div style={{ minHeight: '100vh', background: '#f7f7fb', fontFamily: font }}>
       <header style={{ background: '#fff', borderBottom: '1px solid #ececf4', padding: '14px 28px', display: 'flex', alignItems: 'center', gap: 18 }}>
         <Link to="/app" style={{ color: '#888', textDecoration: 'none', fontSize: 13 }}>← Générateur</Link>
-        <span style={{ fontWeight: 700, fontSize: 15 }}>Campagne push</span>
+        <span style={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Campagne push</span>
+        <Link to="/synchro" style={{ color: BLUE, textDecoration: 'none', fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw size={14} /> Synchroniser mes envois avec Boond
+        </Link>
       </header>
 
       <main style={{ maxWidth: 1180, margin: '0 auto', padding: '1.75rem 1.5rem' }}>
         {/* 1. Le consultant */}
         <section style={card}>
           <h2 style={h2}>1. Le consultant poussé</h2>
-          {dossier ? (
-            <div style={{ fontSize: 13, color: '#333' }}>
-              <strong>{dossier.prenom || String(dossier.nom || '').split(' ')[0]}</strong>
-              {' — '}{dossier.metier || dossier.titre}
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: '#b26a00' }}>
-              Aucun dossier sélectionné. Génère d'abord le dossier du consultant, puis clique sur
-              « Campagne push ». <Link to="/app" style={{ color: BLUE }}>Aller au générateur</Link>
+          <label style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '1.2rem',
+            border: `2px dashed ${BLUE}`, borderRadius: 12, cursor: 'pointer', color: BLUE, fontSize: 13, fontWeight: 600,
+            background: '#f7f7ff'
+          }}>
+            <FileText size={16} />
+            {readingPdf ? 'Lecture du dossier…'
+              : pdf ? `${pdf.file.name} — joint aux mails`
+                : 'Déposer le PDF du dossier de compétences (il sera joint aux mails)'}
+            <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => onPdf(e.target.files?.[0])} />
+          </label>
+          {dossier && (
+            <p style={{ fontSize: 12, color: '#555', margin: '8px 0 0' }}>
+              Dossier repris du générateur : les mails s'appuient dessus. Déposez aussi son PDF pour la pièce jointe.
+            </p>
+          )}
+          {(dossier || pdf) && !readingPdf && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: '0.9rem' }}>
+              {[['prenom', 'Prénom'], ['nom', 'Nom'], ['metier', 'Intitulé (objet du mail)'], ['expertise', 'Expertise (note Boond)']].map(([k, label]) => (
+                <label key={k} style={{ fontSize: 12, color: '#555' }}>
+                  {label}
+                  <input value={profil[k] || ''} onChange={e => setProfil(p => ({ ...p, [k]: e.target.value }))}
+                    style={{ width: '100%', marginTop: 3, padding: '6px 8px', borderRadius: 6, border: '1.5px solid #e0e0e0', fontFamily: font, fontSize: 12, boxSizing: 'border-box' }} />
+                </label>
+              ))}
             </div>
           )}
         </section>
@@ -248,9 +371,14 @@ export default function CampaignPage() {
           <section style={card}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '0.9rem', flexWrap: 'wrap' }}>
               <h2 style={{ ...h2, margin: 0, flex: 1 }}>3. Prospects — {selected.length} retenus sur {rows.length}</h2>
-              <button style={btn(true, !!busy || !checked || !selected.length || !dossier)}
-                disabled={!!busy || !checked || !selected.length || !dossier} onClick={runWrite}>
+              <button style={btn(true, !!busy || !checked || !selected.length || !consultantReady)}
+                disabled={!!busy || !checked || !selected.length || !consultantReady} onClick={runWrite}>
                 <PenLine size={14} /> Rédiger les mails ({selected.length})
+              </button>
+              <button style={btn(true, !!busy || !draftable.length || !pdf)}
+                disabled={!!busy || !draftable.length || !pdf} onClick={runDrafts}
+                title={!pdf ? 'Déposez le PDF du dossier (étape 1)' : ''}>
+                <Mail size={14} /> Créer les brouillons Gmail ({draftable.length})
               </button>
               <button style={btn(false, !!busy)} disabled={!!busy} onClick={onExport}>
                 <Download size={14} /> Exporter en Excel
@@ -321,6 +449,11 @@ export default function CampaignPage() {
                                 {r.mail.objet} {openMail === r.id ? '▲' : '▼'}
                               </button>
                             ) : <span style={{ color: '#aaa' }}>—</span>}
+                            {r.draft && (
+                              <div style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: r.draft.id ? '#1b7a3d' : '#c62828' }}>
+                                {r.draft.id ? '✓ Brouillon dans Gmail' : `Brouillon non créé : ${r.draft.error}`}
+                              </div>
+                            )}
                             {r.mail?.adequation && (() => {
                               const a = FIT[r.mail.adequation]
                               return (
@@ -351,6 +484,7 @@ export default function CampaignPage() {
             </div>
             <p style={{ fontSize: 11, color: '#999', margin: '12px 0 0' }}>
               Sont décochés par défaut : les clients actifs, et les contacts touchés dans Boond ces 60 derniers jours. Les plages horaires proposées dans les mails (« en matinée », « à partir de 16h »…) sont prises dans vos disponibilités Google Agenda (6 prochains jours ouvrés) et varient d'un mail à l'autre. L'adéquation dit si le profil parle vraiment au prospect : sur une adéquation faible, mieux vaut ne pas envoyer.
+              Rien n'est écrit dans Boond ici : une fois les mails envoyés depuis Gmail, lancez « Synchroniser mes envois avec Boond ».
               Tu peux recocher une ligne si tu sais pourquoi.
             </p>
           </section>

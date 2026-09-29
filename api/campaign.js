@@ -1,7 +1,8 @@
-// Campagne push — étape 1 : vérification Boond, créneaux et rédaction des mails.
+// Campagne push : profil du consultant, vérification Boond, plages horaires,
+// rédaction des mails, puis brouillons Gmail avec le dossier PDF en PJ.
 //
-// Rien n'est écrit dans Boond, Gmail ou l'agenda à ce stade : la route lit
-// Boond, lit les disponibilités du bizdev et rédige. Le front envoie la liste par petits paquets pour afficher une
+// Rien n'est écrit dans Boond ici : la trace dans Boond est posée par la
+// synchro des mails envoyés (mail-sync.js), une fois le mail réellement parti. Le front envoie la liste par petits paquets pour afficher une
 // progression et rester loin des délais maximum de Vercel.
 import Anthropic from '@anthropic-ai/sdk'
 import {
@@ -10,6 +11,10 @@ import {
 } from './boond-lib.js'
 import { fetchBusy, freeRangesByDay, assignSlots } from './calendar-slots.js'
 import { getSenderInfo } from './sender.js'
+import {
+  googleAuth, googleErrorMessage, startPdfUpload, isDriveUploadUrl, sendPdfChunk,
+  downloadFile, buildMime, createDraft, appendCampaignLog
+} from './google-lib.js'
 
 export const config = { maxDuration: 300 }
 
@@ -25,6 +30,7 @@ function getSession(req) {
 const RECENT_DAYS = 60
 const MAX_ROWS_CHECK = 10
 const MAX_ROWS_WRITE = 6
+const MAX_DRAFTS = 5
 
 // Petit limiteur de concurrence : Boond n'aime pas les rafales.
 async function mapLimit(items, limit, fn) {
@@ -125,6 +131,14 @@ const strip = (s) => String(s || '').replace(/\*\*/g, '')
 
 const consultantFirstName = (d) => d.prenom || String(d.nom || '').split(' ')[0]
 
+// Le consultant vient soit du générateur (dossier structuré), soit d'un PDF de
+// dossier déjà produit : on en a alors le texte et un petit profil (prénom,
+// nom, métier) relu par le bizdev.
+function consultantOf({ dossier, dossierText, profil }) {
+  if (dossier) return dossier
+  return { ...(profil || {}), texte: String(dossierText || '').slice(0, 15000) }
+}
+
 // « LUCA » ou « luca » (exports LinkedIn) → « Luca » ; « jean-marc » → « Jean-Marc »
 function capitalize(name) {
   const s = String(name || '').trim()
@@ -134,6 +148,9 @@ function capitalize(name) {
 
 // Fiche condensée du consultant : ce que le rédacteur a le droit d'affirmer.
 function talentBrief(d) {
+  if (d.texte) {
+    return `Prénom : ${consultantFirstName(d)}\nIntitulé : ${d.metier || ''}\n\nTEXTE DU DOSSIER DE COMPÉTENCES (extrait du PDF) :\n${d.texte}`
+  }
   const lines = [
     `Prénom : ${consultantFirstName(d)}`,
     `Intitulé : ${d.metier || d.titre || ''}`,
@@ -234,6 +251,71 @@ async function writeEmails(dossier, rows, sender) {
   })
 }
 
+// ── Profil du consultant à partir d'un PDF de dossier ───────────────────────
+
+const PROFILE_SCHEMA = {
+  type: 'object',
+  properties: {
+    prenom: { type: 'string' },
+    nom: { type: 'string' },
+    metier: { type: 'string' },
+    expertise: { type: 'string' }
+  },
+  required: ['prenom', 'nom', 'metier', 'expertise'],
+  additionalProperties: false
+}
+
+async function readProfile(dossierText, fileName) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const response = await anthropic.messages.create({
+    model: 'claude-opus-5-5',
+    max_tokens: 4000,
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: PROFILE_SCHEMA } },
+    fallbacks: 'default',
+    system: `Tu lis un dossier de compétences ever"T (PDF converti en texte) et tu en tires l'identité du consultant.
+- "prenom" et "nom" : prénom et nom de famille. Le nom de fichier suit souvent le format "Dossier <titre> — <Nom Prénom>.pdf" ; la couverture n'affiche parfois que le prénom. Chaîne vide si introuvable.
+- "metier" : l'intitulé de poste affiché en couverture, tel quel (ex. "Product Owner Data & IA").
+- "expertise" : l'expertise du profil en 3 à 6 mots, pour une note CRM (ex. "Product Owner Data & IA").
+N'invente rien.`,
+    messages: [{ role: 'user', content: `NOM DU FICHIER : ${fileName || '(inconnu)'}\n\nTEXTE :\n${String(dossierText).slice(0, 12000)}` }]
+  }, { headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' } })
+  if (response.stop_reason === 'refusal') throw new Error('Lecture du dossier refusée par le modèle')
+  const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
+  return JSON.parse(text)
+}
+
+// ── Brouillons Gmail ─────────────────────────────────────────────────────────
+
+async function createDrafts(session, { pdfFileId, rows, consultant }) {
+  const auth = googleAuth(session)
+  const pdf = await downloadFile(auth, pdfFileId)
+  const results = []
+  for (const r of rows) {
+    try {
+      if (!r.email) throw new Error('Pas d\'email pour ce prospect')
+      const draftId = await createDraft(auth, buildMime({ to: r.email, subject: r.objet, text: r.corps, attachment: pdf }))
+      results.push({ id: r.id, draftId })
+    } catch (err) {
+      results.push({ id: r.id, error: err.code || err.response ? googleErrorMessage(err, 'Gmail') : err.message })
+    }
+  }
+  // Journal Drive : servira à créer le prospect dans Boond s'il y est absent
+  // quand la synchro verra le mail parti. Un échec ici ne bloque pas les brouillons.
+  const ok = new Set(results.filter(x => x.draftId).map(x => x.id))
+  const date = new Date().toISOString()
+  try {
+    await appendCampaignLog(auth, rows.filter(r => ok.has(r.id)).map(r => ({
+      date, email: String(r.email).toLowerCase(), prenom: r.prenom || '', nom: r.nom || '', poste: r.poste || '',
+      entreprise: r.entreprise || '', entrepriseDeduite: !!r.entrepriseDeduite,
+      boondCompanyId: r.boondCompanyId || null, boondContactId: r.boondContactId || null,
+      consultant: consultant?.nomComplet || '', expertise: consultant?.expertise || '', pdf: pdf.name
+    })))
+  } catch (err) {
+    console.error('Campaign log error:', err.message)
+  }
+  return results
+}
+
 // ── Créneaux Google Agenda ───────────────────────────────────────────────────
 
 // Les erreurs Google les plus probables, traduites en consigne claire.
@@ -266,9 +348,35 @@ export default async function handler(req, res) {
   const session = getSession(req)
   if (!session) return res.status(401).json({ error: 'Non authentifié' })
 
-  const { action, rows, dossier, count } = req.body || {}
+  const { action, rows, dossier, dossierText, profil, count } = req.body || {}
 
   try {
+    if (action === 'profile') {
+      if (!dossierText) return res.status(400).json({ error: 'Texte du dossier manquant' })
+      return res.json({ profil: await readProfile(dossierText, req.body.fileName) })
+    }
+
+    if (action === 'pdf-start') {
+      const { name, size } = req.body
+      if (!name || !(size > 0)) return res.status(400).json({ error: 'PDF manquant' })
+      try { return res.json({ uploadUrl: await startPdfUpload(googleAuth(session), { name, size }) }) }
+      catch (err) { return res.status(502).json({ error: googleErrorMessage(err, 'Google Drive') }) }
+    }
+
+    if (action === 'pdf-chunk') {
+      const { uploadUrl, offset, total, data } = req.body
+      if (!isDriveUploadUrl(uploadUrl) || typeof data !== 'string') return res.status(400).json({ error: 'Envoi du PDF invalide' })
+      return res.json(await sendPdfChunk(uploadUrl, { offset, total, data }))
+    }
+
+    if (action === 'drafts') {
+      const { pdfFileId, consultant } = req.body
+      if (!pdfFileId) return res.status(400).json({ error: 'Dossier PDF manquant' })
+      if (!Array.isArray(rows) || !rows.length || rows.length > MAX_DRAFTS) return res.status(400).json({ error: `1 à ${MAX_DRAFTS} brouillons par appel` })
+      try { return res.json({ results: await createDrafts(session, { pdfFileId, rows, consultant }) }) }
+      catch (err) { return res.status(502).json({ error: googleErrorMessage(err, 'Google Drive') }) }
+    }
+
     if (action === 'slots') {
       const n = Math.min(Math.max(Number(count) || 0, 1), 500)
       return res.json(await proposeSlots(session, n))
@@ -286,8 +394,8 @@ export default async function handler(req, res) {
 
     if (action === 'write') {
       if (rows.length > MAX_ROWS_WRITE) return res.status(400).json({ error: `${MAX_ROWS_WRITE} lignes maximum par appel` })
-      if (!dossier) return res.status(400).json({ error: 'Dossier du consultant manquant' })
-      const emails = await writeEmails(dossier, rows, getSenderInfo(session.email || ''))
+      if (!dossier && !dossierText) return res.status(400).json({ error: 'Dossier du consultant manquant' })
+      const emails = await writeEmails(consultantOf({ dossier, dossierText, profil }), rows, getSenderInfo(session.email || ''))
       return res.json({ emails })
     }
 
