@@ -8,7 +8,7 @@ import {
   boondFromEnv, boondUrl, findContact, contactCompany, findCompany,
   companyStatus, lastContactAction
 } from './boond-lib.js'
-import { fetchBusy, freeSlotsByDay, assignSlots } from './calendar-slots.js'
+import { fetchBusy, freeRangesByDay, assignSlots } from './calendar-slots.js'
 import { getSenderInfo } from './sender.js'
 
 export const config = { maxDuration: 300 }
@@ -73,7 +73,12 @@ async function checkRow(boond, row) {
 
 const WRITE_SYSTEM = `Tu prépares des mails de prospection "push dossier" pour ever"T (conseil Tech, Data.IA et Product, groupe WOLD). Chaque mail présente UN consultant à UN prospect ; le reste du mail est déjà écrit, tu ne fournis que les éléments demandés.
 
-Tu reçois la fiche du consultant et une liste de prospects (poste, technologies, profils qu'ils encadrent).
+Tu reçois la fiche du consultant et une liste de prospects : poste, entreprise, technologies qu'ils utilisent, profils qu'ils encadrent.
+
+LE PRINCIPE : le prospect doit se reconnaître dans les points forts. Chaque mail met en avant ce que le consultant a en commun avec le prospect :
+- des TECHNOS : celles de la fiche qui figurent aussi dans les technologies du prospect, ou qui en sont très proches (même famille, même usage) ;
+- un CONTEXTE MÉTIER : une expérience dans le même secteur que l'entreprise du prospect (luxe, banque, assurance, retail, santé, industrie, énergie, médias…), ou sur un sujet proche de son poste et des profils qu'il encadre (un Head of Data lit "plateforme data", un CTO lit "architecture et delivery", un CPO lit "produit").
+Le secteur d'une entreprise connue peut se déduire de son nom (Dior → luxe, BNP Paribas → banque) : il sert à choisir les expériences, il n'est jamais écrit dans le mail.
 
 À FOURNIR UNE FOIS :
 - "intitule" : l'intitulé du consultant tel qu'il s'insère dans la phrase "le profil de Rayane, <intitule>, dont je viens d'apprendre la disponibilité". Court (2 à 6 mots), repris de la fiche. Exemple : "Product Owner Data & IA".
@@ -83,11 +88,13 @@ POUR CHAQUE PROSPECT (reprends son "id") :
 - "points" : 3 points forts, au format "Thème (Client) : éléments concrets".
   Exemple : "Semantic layer & fiabilité des réponses IA (Clarins) : Golden Questions Dataset, critères d'acceptation, tests de non-régression".
   Le client entre parenthèses est une entreprise où le consultant a travaillé d'après la fiche ; si une expérience n'a pas de nom d'entreprise, retire la parenthèse.
-  Choisis les expériences et éléments qui parlent le plus à ce prospect (ses technologies, les profils qu'il encadre). S'il n'y a pas de recoupement, prends les points les plus solides de la fiche.
+  Classe les points du plus parlant au moins parlant pour CE prospect : le premier porte le recoupement le plus fort (technos communes ou contexte métier proche). Nomme explicitement dans les éléments concrets les technos que le prospect utilise aussi.
   Ajoute un 4e point "Anglais courant" (ou "Anglais bilingue") uniquement si la fiche indique ce niveau.
+- "adequation" : "forte" (technos communes ET contexte métier ou poste proche), "moyenne" (l'un des deux), "faible" (aucun recoupement réel : les points sont alors les plus solides de la fiche, sans forcer le lien).
+- "raison" : une phrase courte pour le bizdev, pas pour le prospect, qui dit sur quoi repose le lien. Exemple : "Technos communes : Snowflake, dbt ; expérience luxe (Clarins) proche de Dior". Si "faible", dis ce qui manque.
 
 RÈGLES :
-- N'invente rien : ni compétence, ni client, ni chiffre, ni techno. Chaque élément doit se trouver dans la fiche.
+- N'invente rien : ni compétence, ni client, ni chiffre, ni techno. Chaque élément des points doit se trouver dans la fiche. Ne prête au consultant aucune techno du prospect qui n'est pas dans la fiche.
 - Chaque point tient sur une ligne (25 mots maximum), sans puce, sans gras, sans point final.`
 
 const EMAIL_SCHEMA = {
@@ -101,9 +108,11 @@ const EMAIL_SCHEMA = {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          points: { type: 'array', items: { type: 'string' } }
+          points: { type: 'array', items: { type: 'string' } },
+          adequation: { type: 'string', enum: ['forte', 'moyenne', 'faible'] },
+          raison: { type: 'string' }
         },
-        required: ['id', 'points'],
+        required: ['id', 'points', 'adequation', 'raison'],
         additionalProperties: false
       }
     }
@@ -188,7 +197,7 @@ export function composeMail({ prospect, sender, consultant, intitule, pronom, po
 async function writeEmails(dossier, rows, sender) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const prospects = rows.map(r => ({
-    id: r.id, poste: r.poste, technologies: r.technologies, profils_encadres: r.profils
+    id: r.id, poste: r.poste, entreprise: r.entreprise || '', technologies: r.technologies, profils_encadres: r.profils
   }))
   const response = await anthropic.messages.create({
     model: 'claude-opus-5-5',
@@ -212,11 +221,14 @@ async function writeEmails(dossier, rows, sender) {
   const intitule = out.intitule || dossier.metier || ''
   const objet = mailSubject(dossier)
   return rows.map(r => {
-    const points = out.emails.find(e => e.id === r.id)?.points
+    const m = out.emails.find(e => e.id === r.id)
+    const points = m?.points
     if (!points?.length) return { id: r.id, objet, corps: '', error: 'Mail non rédigé' }
     return {
       id: r.id,
       objet,
+      adequation: m.adequation,
+      raison: m.raison,
       corps: composeMail({ prospect: r, sender, consultant, intitule, pronom: out.pronom, points, creneaux: r.creneaux })
     }
   })
@@ -240,8 +252,8 @@ function calendarWarning(err) {
 async function proposeSlots(session, count) {
   try {
     const { busy, days } = await fetchBusy(session)
-    const groups = freeSlotsByDay(busy, days)
-    if (!groups.length) return { assignments: null, warning: 'calendar_full', message: 'Aucun créneau libre dans votre agenda sur les 6 prochains jours ouvrés.' }
+    const groups = freeRangesByDay(busy, days)
+    if (!groups.length) return { assignments: null, warning: 'calendar_full', message: 'Aucune plage libre dans votre agenda sur les 6 prochains jours ouvrés.' }
     return { assignments: assignSlots(groups, count) }
   } catch (err) {
     console.error('Calendar error:', err.message)

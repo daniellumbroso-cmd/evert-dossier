@@ -1,5 +1,5 @@
-// Créneaux libres du bizdev, lus dans son Google Agenda, pour les proposer
-// dans les mails push.
+// Plages horaires libres du bizdev (« Mardi 06/10 en matinée », « Jeudi 08/10
+// à partir de 16h »), lues dans son Google Agenda, pour les mails push.
 //
 // Seule la disponibilité est lue (autorisation « calendar.freebusy ») : ni le
 // titre ni le contenu des rendez-vous ne remontent jusqu'à l'application.
@@ -7,9 +7,21 @@ import { google } from 'googleapis'
 import { OAuth2Client } from 'google-auth-library'
 
 const TZ = 'Europe/Paris'
-const SLOT_MINUTES = 30
-// Heures de début proposées, en heure de Paris
-const START_TIMES = [[9, 30], [10, 30], [11, 30], [14, 0], [15, 0], [16, 0], [17, 0]]
+// Plages proposées au prospect, en heure de Paris. Il choisit l'heure précise
+// dans la plage, ce qui laisse de la souplesse des deux côtés.
+const PLAGES = [
+  { label: 'en matinée', from: [9, 0], to: [12, 30] },
+  { label: 'à partir de 14h', from: [14, 0], to: [18, 30], debut: true },
+  { label: 'à partir de 15h', from: [15, 0], to: [18, 30], debut: true },
+  { label: 'à partir de 16h', from: [16, 0], to: [18, 30], debut: true }
+]
+// Une plage n'est proposée que si le bizdev y a au moins 1 h libre d'un seul
+// tenant, et que la moitié de la plage est libre. Pour « à partir de 16h »,
+// cette heure libre doit être la première (le prospect peut prendre 16h) et
+// les trois quarts de la plage doivent être libres.
+const MIN_BLOCK_MINUTES = 60
+const MIN_FREE_RATIO = 0.5
+const MIN_FREE_RATIO_DEBUT = 0.75   // « à partir de » : l'après-midi doit être presque entièrement libre
 const WINDOW_DAYS = 6          // jours ouvrés couverts, à partir du prochain jour ouvré
 const JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
 
@@ -63,31 +75,47 @@ function nextWorkingDays(count) {
   return days
 }
 
-const label = (day, h, min) =>
-  `${JOURS[day.dow]} ${String(day.d).padStart(2, '0')}/${String(day.m).padStart(2, '0')} à ${h}h${min ? String(min).padStart(2, '0') : ''}`
+const dayLabel = (day) => `${JOURS[day.dow]} ${String(day.d).padStart(2, '0')}/${String(day.m).padStart(2, '0')}`
 
-// Créneaux libres regroupés par jour. `busy` : [{ start, end }] renvoyé par Google.
-export function freeSlotsByDay(busy, days = nextWorkingDays(WINDOW_DAYS)) {
+// Temps libre dans [start, end[ : total et plus long bloc d'un seul tenant (en minutes).
+function freeTime(intervals, start, end) {
+  const busy = intervals
+    .map(([s, e]) => [Math.max(s, start), Math.min(e, end)])
+    .filter(([s, e]) => e > s)
+    .sort((a, b) => a[0] - b[0])
+  let cursor = start, total = 0, longest = 0
+  for (const [s, e] of [...busy, [end, end]]) {
+    if (s > cursor) { total += s - cursor; longest = Math.max(longest, s - cursor) }
+    cursor = Math.max(cursor, e)
+  }
+  return { total: total / 60000, longest: longest / 60000 }
+}
+
+// Plages libres regroupées par jour. `busy` : [{ start, end }] renvoyé par Google.
+export function freeRangesByDay(busy, days = nextWorkingDays(WINDOW_DAYS)) {
   const intervals = busy.map(b => [new Date(b.start).getTime(), new Date(b.end).getTime()])
   return days.map(day => ({
     day,
-    slots: START_TIMES
-      .map(([h, min]) => {
-        const start = parisToUtc(day.y, day.m, day.d, h, min).getTime()
-        const end = start + SLOT_MINUTES * 60000
-        return { start, label: label(day, h, min), free: !intervals.some(([s, e]) => s < end && e > start) }
+    slots: PLAGES
+      .map(p => {
+        const start = parisToUtc(day.y, day.m, day.d, ...p.from).getTime()
+        const end = parisToUtc(day.y, day.m, day.d, ...p.to).getTime()
+        const { total, longest } = freeTime(intervals, start, end)
+        const firstHour = freeTime(intervals, start, start + MIN_BLOCK_MINUTES * 60000).total
+        const ok = (p.debut ? firstHour >= MIN_BLOCK_MINUTES : longest >= MIN_BLOCK_MINUTES) &&
+          total >= (p.debut ? MIN_FREE_RATIO_DEBUT : MIN_FREE_RATIO) * (end - start) / 60000
+        return { start, label: `${dayLabel(day)} ${p.label}`, ok }
       })
-      .filter(s => s.free)
+      .filter(s => s.ok)
   })).filter(g => g.slots.length)
 }
 
-// Trois créneaux par mail, sur trois jours différents. Chaque jour distribue ses
-// créneaux à tour de rôle : si deux prospects acceptent, ils ne tombent pas sur
-// le même créneau (tant que l'agenda en offre assez).
+// Trois plages par mail, sur trois jours différents. Chaque jour distribue ses
+// plages à tour de rôle, pour varier les propositions d'un prospect à l'autre.
 export function assignSlots(groups, count, perMail = 3) {
   if (!groups.length) return Array.from({ length: count }, () => [])
   const n = Math.min(perMail, groups.length)
-  const cursor = groups.map((_, i) => i * 2)   // décalage : pas la même heure tous les jours
+  const cursor = groups.map((_, i) => i)   // décalage : pas la même plage tous les jours
   return Array.from({ length: count }, (_, k) => {
     const picks = []
     for (let j = 0; j < n; j++) {

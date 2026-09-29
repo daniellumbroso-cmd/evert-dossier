@@ -76,7 +76,7 @@ export async function exportCampaign(rows, fileName) {
   const header = [
     'Prénom', 'Nom', 'Poste', 'Technologies', 'Profils encadrés', 'Email', 'LinkedIn',
     'Entreprise (Boond)', 'Verdict', 'Statut client', 'Dernier contact Boond', 'Retenu',
-    'Objet du mail', 'Corps du mail', 'Fiche Boond'
+    'Adéquation', 'Pourquoi', 'Objet du mail', 'Corps du mail', 'Fiche Boond'
   ].map(bold)
   const body = rows.map(r => [
     r.prenom, r.nom, r.poste, r.technologies, r.profils, r.email, r.linkedin,
@@ -85,11 +85,13 @@ export async function exportCampaign(rows, fileName) {
     r.statusLabel || '',
     r.check?.lastAction ? `${r.check.lastAction.date.slice(0, 10)} ${r.check.lastAction.by || ''} — ${r.check.lastAction.text.slice(0, 140)}` : '',
     r.selected ? 'oui' : 'non',
+    r.mail?.adequation || '',
+    r.mail?.raison || '',
     r.mail?.objet || '',
     r.mail?.corps || '',
     r.check?.contact?.url || r.check?.company?.url || ''
   ].map(v => ({ value: String(v ?? ''), wrap: true })))
   await writeXlsxFile([header, ...body], {
-    columns: [14, 16, 26, 26, 22, 28, 30, 22, 18, 16, 40, 8, 34, 70, 44].map(width => ({ width }))
+    columns: [14, 16, 26, 26, 22, 28, 30, 22, 18, 16, 40, 8, 12, 40, 34, 70, 44].map(width => ({ width }))
   }).toFile(fileName)
 }

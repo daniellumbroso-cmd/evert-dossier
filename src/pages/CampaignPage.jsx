@@ -20,6 +20,12 @@ const VERDICTS = {
   prospect: { label: 'Prospect connu', color: '#1b7a3d', bg: '#e8f6ee', keep: true },
   nouveau: { label: 'Nouveau', color: BLUE, bg: '#eeeeff', keep: true }
 }
+// Adéquation entre le profil poussé et le prospect, estimée à la rédaction.
+const FIT = {
+  forte: { label: 'Adéquation forte', color: '#1b7a3d', bg: '#e8f6ee' },
+  moyenne: { label: 'Adéquation moyenne', color: '#b26a00', bg: '#fff4e0' },
+  faible: { label: 'Adéquation faible', color: '#c62828', bg: '#fdecec' }
+}
 const STATUS = { active_client: 'Client actif', past_client: 'Ancien client', prospect: 'Prospect', unknown: '—' }
 
 function loadDossier() {
@@ -125,7 +131,7 @@ export default function CampaignPage() {
         for (const m of emails) {
           const r = byId.get(m.id)
           if (!r) continue
-          if (m.corps) r.mail = { objet: m.objet, corps: m.corps }
+          if (m.corps) r.mail = { objet: m.objet, corps: m.corps, adequation: m.adequation, raison: m.raison }
           else failed++
         }
         setRows([...byId.values()])
@@ -315,6 +321,15 @@ export default function CampaignPage() {
                                 {r.mail.objet} {openMail === r.id ? '▲' : '▼'}
                               </button>
                             ) : <span style={{ color: '#aaa' }}>—</span>}
+                            {r.mail?.adequation && (() => {
+                              const a = FIT[r.mail.adequation]
+                              return (
+                                <div style={{ marginTop: 4, fontSize: 11, color: '#666' }} title={r.mail.raison}>
+                                  <span style={{ background: a.bg, color: a.color, borderRadius: 10, padding: '2px 8px', fontWeight: 600, marginRight: 6 }}>{a.label}</span>
+                                  {r.mail.raison}
+                                </div>
+                              )
+                            })()}
                           </td>
                         </tr>
                         {openMail === r.id && r.mail && (
@@ -335,7 +350,7 @@ export default function CampaignPage() {
               </table>
             </div>
             <p style={{ fontSize: 11, color: '#999', margin: '12px 0 0' }}>
-              Sont décochés par défaut : les clients actifs, et les contacts touchés dans Boond ces 60 derniers jours. Les créneaux proposés dans les mails sont pris dans vos disponibilités Google Agenda (6 prochains jours ouvrés) et varient d'un mail à l'autre.
+              Sont décochés par défaut : les clients actifs, et les contacts touchés dans Boond ces 60 derniers jours. Les plages horaires proposées dans les mails (« en matinée », « à partir de 16h »…) sont prises dans vos disponibilités Google Agenda (6 prochains jours ouvrés) et varient d'un mail à l'autre. L'adéquation dit si le profil parle vraiment au prospect : sur une adéquation faible, mieux vaut ne pas envoyer.
               Tu peux recocher une ligne si tu sais pourquoi.
             </p>
           </section>

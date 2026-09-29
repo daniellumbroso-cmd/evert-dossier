@@ -3,6 +3,19 @@
 // Les autres routes Boond (boond-search, boond-push-leads…) portent chacune leur
 // propre copie de ces fonctions ; ce module est prévu pour les regrouper, mais
 // seule la campagne l'utilise pour l'instant.
+//
+// Écriture (étape 2, pas encore branchée) — format relevé dans le serveur MCP
+// open source fauguste/boondmanager-mcp-server, qui couvre toute l'API :
+// - POST /companies { data: { type: 'company', attributes: { name, website } } }
+// - POST /contacts  { data: { type: 'contact', attributes: { firstName, lastName, email1, title },
+//                     relationships: { company: { data: { id, type: 'company' } } } } }
+// - POST /actions   { data: { type: 'action', attributes: { typeOf, text, startDate },
+//                     relationships: { dependsOn: { data: { id, type: 'contact' } },
+//                                      company: { data: { id, type: 'company' } } } } }
+//   typeOf est un ID numérique propre à l'instance : GET /application/dictionary,
+//   sous setting.action.contact. Une action se rattache toujours à un contact.
+// - Responsable : relation mainManager { id, type: 'resource' }.
+// - Recherches : keywords "CSOC<id>" = contacts d'une société, "CCON<id>" = actions d'un contact.
 import crypto from 'crypto'
 
 function buildBoondJWT(userToken, clientToken, clientKey) {
