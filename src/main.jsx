@@ -12,6 +12,7 @@ import MatchPage from './pages/MatchPage'
 const CampaignPage = React.lazy(() => import('./pages/CampaignPage'))
 const SyncPage = React.lazy(() => import('./pages/SyncPage'))
 import ProtectedRoute from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -34,6 +35,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           error: { iconTheme: { primary: '#ff3333', secondary: '#ffffff' } }
         }}
       />
+      <ErrorBoundary>
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/app" element={
@@ -69,6 +71,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         {/* Ancienne URL /push → redirige vers /match (compatibilité favoris) */}
         <Route path="/push" element={<Navigate to="/match" replace />} />
       </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   </React.StrictMode>
 )

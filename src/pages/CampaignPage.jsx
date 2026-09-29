@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Upload, ShieldCheck, PenLine, Download, Mail, FileText, RefreshCw } from 'lucide-react'
+import { Upload, ShieldCheck, PenLine, Download, Mail, FileText, RefreshCw, ExternalLink } from 'lucide-react'
 import { FIELDS, detectColumns, readProspectFile, toProspects, exportCampaign } from '../lib/spreadsheet'
 import { extractPdfText, MIN_USABLE_TEXT } from '../lib/pdfText'
 
@@ -54,6 +54,27 @@ function blobToBase64(blob) {
     reader.onerror = () => reject(reader.error)
     reader.readAsDataURL(blob)
   })
+}
+
+// Zone de fichier : clic pour parcourir, ou glisser-déposer.
+function DropZone({ accept, onFile, icon, children }) {
+  const [over, setOver] = useState(false)
+  return (
+    <label
+      onDragOver={e => { e.preventDefault(); setOver(true) }}
+      onDragLeave={() => setOver(false)}
+      onDrop={e => { e.preventDefault(); setOver(false); onFile(e.dataTransfer.files?.[0]) }}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '1.3rem',
+        border: `2px dashed ${BLUE}`, borderRadius: 12, cursor: 'pointer', color: BLUE, fontSize: 13, fontWeight: 600,
+        background: over ? '#e4e2ff' : '#f7f7ff', transition: 'background .15s'
+      }}>
+      {icon}
+      {children}
+      <input type="file" accept={accept} style={{ display: 'none' }}
+        onChange={e => { onFile(e.target.files?.[0]); e.target.value = '' }} />
+    </label>
+  )
 }
 
 async function postCampaign(body) {
@@ -250,6 +271,7 @@ export default function CampaignPage() {
     }
   }
 
+  const toggle = (id) => setRows(rs => rs.map(r => r.id === id ? { ...r, selected: !r.selected } : r))
   const editMail = (id, field, value) =>
     setRows(rs => rs.map(r => r.id === id ? { ...r, mail: { ...r.mail, [field]: value } } : r))
 
@@ -275,17 +297,11 @@ export default function CampaignPage() {
         {/* 1. Le consultant */}
         <section style={card}>
           <h2 style={h2}>1. Le consultant poussé</h2>
-          <label style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '1.2rem',
-            border: `2px dashed ${BLUE}`, borderRadius: 12, cursor: 'pointer', color: BLUE, fontSize: 13, fontWeight: 600,
-            background: '#f7f7ff'
-          }}>
-            <FileText size={16} />
+          <DropZone accept=".pdf" onFile={onPdf} icon={<FileText size={16} />}>
             {readingPdf ? 'Lecture du dossier…'
               : pdf ? `${pdf.file.name} — joint aux mails`
-                : 'Déposer le PDF du dossier de compétences (il sera joint aux mails)'}
-            <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => onPdf(e.target.files?.[0])} />
-          </label>
+                : 'Glisser ici le PDF du dossier de compétences, ou cliquer pour le choisir (il sera joint aux mails)'}
+          </DropZone>
           {dossier && (
             <p style={{ fontSize: 12, color: '#555', margin: '8px 0 0' }}>
               Dossier repris du générateur : les mails s'appuient dessus. Déposez aussi son PDF pour la pièce jointe.
@@ -307,15 +323,9 @@ export default function CampaignPage() {
         {/* 2. La liste LinkedIn */}
         <section style={card}>
           <h2 style={h2}>2. La liste de prospects</h2>
-          <label style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '1.4rem',
-            border: `2px dashed ${BLUE}`, borderRadius: 12, cursor: 'pointer', color: BLUE, fontSize: 13, fontWeight: 600,
-            background: '#f7f7ff'
-          }}>
-            <Upload size={16} />
-            {file ? `${file.name} — ${prospects.length} prospects` : 'Déposer l\'Excel issu de LinkedIn (.xlsx ou .csv)'}
-            <input type="file" accept=".xlsx,.csv" style={{ display: 'none' }} onChange={e => onFile(e.target.files?.[0])} />
-          </label>
+          <DropZone accept=".xlsx,.csv" onFile={onFile} icon={<Upload size={16} />}>
+            {file ? `${file.name} — ${prospects.length} prospects` : 'Glisser ici l\'Excel issu de LinkedIn (.xlsx ou .csv), ou cliquer pour le choisir'}
+          </DropZone>
 
           {sheet && (
             <div style={{ marginTop: '1rem' }}>
