@@ -483,6 +483,9 @@ export default function CampaignPage() {
                                 style={{ width: '100%', padding: 8, borderRadius: 6, border: '1.5px solid #e0e0e0', fontFamily: font, fontSize: 12, fontWeight: 600, marginBottom: 6 }} />
                               <textarea value={r.mail.corps} onChange={e => editMail(r.id, 'corps', e.target.value)} rows={14}
                                 style={{ width: '100%', padding: 10, borderRadius: 6, border: '1.5px solid #e0e0e0', fontFamily: font, fontSize: 12, lineHeight: 1.5 }} />
+                              <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+                                Dans le brouillon Gmail : le texte entre ** ** passe en gras, les lignes qui commencent par « * » deviennent des puces, et votre signature Gmail est ajoutée à la fin.
+                              </div>
                             </td>
                           </tr>
                         )}

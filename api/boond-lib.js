@@ -132,13 +132,17 @@ export async function findCompany(boond, { entreprise, poste, email }) {
   const domain = companyDomain(email)
   const keywords = [entreprise, companyFromPoste(poste), domain && domainRoot(domain)]
     .map(k => String(k || '').trim()).filter(Boolean)
+  // « ever t », « ever"T », « Ever-T » : même nom une fois lettres et chiffres seuls gardés
+  const compact = (x) => norm(x).replace(/[^a-z0-9]/g, '')
   for (const kw of [...new Set(keywords)]) {
     const r = await boond.get(`/companies?${qs({ keywords: kw, maxResults: '10' })}`)
     const rows = r.body?.data || []
     const hit =
-      rows.find(c => norm(c.attributes?.name) === norm(kw)) ||
+      rows.find(c => compact(c.attributes?.name) === compact(kw)) ||
       (domain && rows.find(c => norm(c.attributes?.website).includes(domain))) ||
-      (rows.length === 1 ? rows[0] : null)
+      // Résultat unique accepté seulement pour un nom d'entreprise donné dans le
+      // fichier : deviné depuis l'email, il ramène parfois une société sans rapport.
+      (kw === entreprise && rows.length === 1 ? rows[0] : null)
     if (hit) return { id: hit.id, name: hit.attributes?.name || kw, how: kw === entreprise ? 'nom' : 'domaine' }
   }
   return null

@@ -13,7 +13,7 @@ import { fetchBusy, freeRangesByDay, assignSlots } from './calendar-slots.js'
 import { getSenderInfo } from './sender.js'
 import {
   googleAuth, googleErrorMessage, startPdfUpload, isDriveUploadUrl, sendPdfChunk,
-  downloadFile, buildMime, createDraft, appendCampaignLog
+  downloadFile, buildMime, createDraft, appendCampaignLog, gmailSignature
 } from './google-lib.js'
 
 export const config = { maxDuration: 300 }
@@ -182,7 +182,16 @@ export function mailSubject(d) {
   return `ever"T - Groupe Wold | Dossier ${String(d.metier || d.titre || '').trim()} | ${consultantFirstName(d)}`
 }
 
+// Point fort « Thème (Client) : éléments » → thème en gras.
+function boldTheme(point) {
+  const p = String(point).replace(/^[\s*•·-]+/, '').replace(/\*\*/g, '').trim()
+  const i = p.indexOf(' : ')
+  return i > 0 ? `**${p.slice(0, i)}** : ${p.slice(i + 3)}` : p
+}
+
 // Assemble le mail sur le modèle des bizdevs.
+// Mise en forme légère, lisible dans l'éditeur de la page et convertie en
+// HTML dans le brouillon Gmail : **texte** = gras, ligne « * … » = puce.
 // « Enchanté » et « chargé de » sont écartés : ils s'accordent selon la personne
 // qui écrit, que l'application ne connaît pas.
 export function composeMail({ prospect, sender, consultant, intitule, pronom, points, creneaux }) {
@@ -196,15 +205,15 @@ export function composeMail({ prospect, sender, consultant, intitule, pronom, po
   return [
     `Bonjour${prenom ? ' ' + prenom : ''},`,
     '',
-    `Je suis ${sender.signature}, ${maison}${relation}. J'ai le plaisir de vous partager le profil de ${consultant}, ${intitule}, dont je viens d'apprendre la disponibilité et qui a émis le souhait de rejoindre vos équipes (Dossier en PJ).`,
+    `Je suis ${sender.signature}, ${maison}${relation}. J'ai le plaisir de vous partager le profil de **${consultant}, ${intitule}**, dont je viens d'apprendre la disponibilité et qui a émis le souhait de rejoindre vos équipes (Dossier en PJ).`,
     '',
     'Ses points forts :',
-    ...points.map(p => `* ${String(p).replace(/^[\s*•·-]+/, '').trim()}`),
+    ...points.map(p => `* ${boldTheme(p)}`),
     '',
     slots.length
-      ? `${sujet} correspondre à un de vos besoins, à date ou à venir ? Je suis disponible pour organiser un échange. Quel créneau vous conviendrait ?`
-      : `${sujet} correspondre à un de vos besoins, à date ou à venir ? Je suis disponible pour organiser un échange : quelles seraient vos disponibilités ?`,
-    ...slots.map(s => `* ${s}`),
+      ? `${sujet} correspondre à un de vos besoins, à date ou à venir ? Je suis disponible pour organiser un échange. **Quel créneau vous conviendrait ?**`
+      : `${sujet} correspondre à un de vos besoins, à date ou à venir ? Je suis disponible pour organiser un échange : **quelles seraient vos disponibilités ?**`,
+    ...slots.map(s => `* **${s}**`),
     '',
     'Belle journée,',
     sender.signature
@@ -288,12 +297,12 @@ N'invente rien.`,
 
 async function createDrafts(session, { pdfFileId, rows, consultant }) {
   const auth = googleAuth(session)
-  const pdf = await downloadFile(auth, pdfFileId)
+  const [pdf, signatureHtml] = await Promise.all([downloadFile(auth, pdfFileId), gmailSignature(auth, session.email)])
   const results = []
   for (const r of rows) {
     try {
       if (!r.email) throw new Error('Pas d\'email pour ce prospect')
-      const draftId = await createDraft(auth, buildMime({ to: r.email, subject: r.objet, text: r.corps, attachment: pdf }))
+      const draftId = await createDraft(auth, buildMime({ to: r.email, subject: r.objet, text: r.corps, signatureHtml, attachment: pdf }))
       results.push({ id: r.id, draftId })
     } catch (err) {
       results.push({ id: r.id, error: err.code || err.response ? googleErrorMessage(err, 'Gmail') : err.message })

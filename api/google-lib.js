@@ -127,31 +127,84 @@ const b64 = (s) => Buffer.from(s, 'utf8').toString('base64')
 const encodedWord = (s) => /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`
 const wrap76 = (s) => s.replace(/.{1,76}/g, '$&\r\n')
 
-// Message MIME : texte brut + PDF en pièce jointe.
-export function buildMime({ to, subject, text, attachment }) {
-  const boundary = `evert_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
+// Texte du mail (« **gras** », lignes « * puce ») → HTML au format de l'éditeur
+// Gmail : une <div> par ligne, de vraies listes à puces.
+export function mailHtml(text, signatureHtml = '') {
+  const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+  const out = []
+  let list = null
+  for (const line of String(text).split(/\r?\n/)) {
+    const bullet = line.match(/^\s*[*•-]\s+(.*)$/)
+    if (bullet) { (list ||= []).push(`<li>${inline(bullet[1])}</li>`); continue }
+    if (list) {
+      out.push(`<ul>${list.join('')}</ul>`); list = null
+      if (!line.trim()) continue   // la liste a déjà sa marge : pas de ligne vide en plus
+    }
+    out.push(line.trim() ? `<div>${inline(line)}</div>` : '<div><br></div>')
+  }
+  if (list) out.push(`<ul>${list.join('')}</ul>`)
+  const signature = signatureHtml
+    ? `<div><br></div><div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature">${signatureHtml}</div>`
+    : ''
+  return `<div dir="ltr">${out.join('')}${signature}</div>`
+}
+
+// Version texte brut (clients mail sans HTML) : sans les marques de gras.
+const mailPlain = (text, signatureHtml) => {
+  const sig = String(signatureHtml || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(div|p|tr|td)>/gi, '\n').replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\n{3,}/g, '\n\n').trim()
+  return String(text).replace(/\*\*(.+?)\*\*/g, '$1').replace(/^\s*\*\s+/gm, '• ') + (sig ? `\n\n${sig}` : '')
+}
+
+// Message MIME : texte brut + HTML (avec la signature Gmail) + PDF en pièce jointe.
+export function buildMime({ to, subject, text, signatureHtml, attachment }) {
+  const id = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
+  const mixed = `evert_m_${id}`, alt = `evert_a_${id}`
   const fileName = attachment.name
-  const asciiName = fileName.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[—–]/g, '-').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '')
+  const asciiName = fileName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[—–]/g, '-').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '')
+  const part = (type, body) => [
+    `Content-Type: ${type}; charset="UTF-8"`, 'Content-Transfer-Encoding: base64', '', wrap76(b64(body.replace(/\r?\n/g, '\r\n')))
+  ].join('\r\n')
   return [
     `To: ${to}`,
     `Subject: ${encodedWord(subject)}`,
     'MIME-Version: 1.0',
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    `Content-Type: multipart/mixed; boundary="${mixed}"`,
     '',
-    `--${boundary}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    'Content-Transfer-Encoding: base64',
+    `--${mixed}`,
+    `Content-Type: multipart/alternative; boundary="${alt}"`,
     '',
-    wrap76(b64(text.replace(/\r?\n/g, '\r\n'))),
-    `--${boundary}`,
+    `--${alt}`,
+    part('text/plain', mailPlain(text, signatureHtml)),
+    `--${alt}`,
+    part('text/html', mailHtml(text, signatureHtml)),
+    `--${alt}--`,
+    `--${mixed}`,
     `Content-Type: application/pdf; name="${asciiName}"`,
     `Content-Disposition: attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     'Content-Transfer-Encoding: base64',
     '',
     wrap76(attachment.bytes.toString('base64')),
-    `--${boundary}--`,
+    `--${mixed}--`,
     ''
   ].join('\r\n')
+}
+
+// Signature Gmail du bizdev (celle de son adresse principale). Un brouillon créé
+// par l'API ne la reçoit pas automatiquement : on l'ajoute nous-mêmes.
+export async function gmailSignature(auth, email) {
+  try {
+    const gmail = google.gmail({ version: 'v1', auth })
+    const r = await gmail.users.settings.sendAs.list({ userId: 'me' })
+    const list = r.data.sendAs || []
+    const mine = list.find(a => a.sendAsEmail?.toLowerCase() === String(email || '').toLowerCase()) ||
+      list.find(a => a.isDefault) || list.find(a => a.isPrimary)
+    return mine?.signature || ''
+  } catch (err) {
+    console.error('Signature Gmail illisible :', err.message)
+    return ''
+  }
 }
 
 export async function createDraft(auth, mime) {
