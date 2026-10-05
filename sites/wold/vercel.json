@@ -1,5 +1,9 @@
 {
   "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/", "destination": "/cirque-gruss", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/(.*)",
