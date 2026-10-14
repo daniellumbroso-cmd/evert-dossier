@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Upload, ShieldCheck, PenLine, Download, Mail, FileText, RefreshCw, ExternalLink } from 'lucide-react'
-import { FIELDS, detectColumns, readProspectFile, toProspects, exportCampaign } from '../lib/spreadsheet'
+import { FIELDS, detectColumns, bestEmailColumn, readProspectFile, toProspects, exportCampaign } from '../lib/spreadsheet'
 import { extractPdfText, MIN_USABLE_TEXT } from '../lib/pdfText'
 
 // Le consultant vient d'un PDF de dossier déjà produit, ou du générateur
@@ -113,6 +113,7 @@ export default function CampaignPage() {
   const checked = rows.length > 0 && rows.every(r => r.check)
   const consultantReady = !!(dossier || pdf?.text) && !!profil.prenom && !!profil.metier
   const draftable = selected.filter(r => r.mail && r.email && !r.draft?.id)
+  const withoutEmail = selected.filter(r => !r.email).length
 
   const onPdf = async (f) => {
     if (!f) return
@@ -138,7 +139,9 @@ export default function CampaignPage() {
     try {
       const s = await readProspectFile(f)
       if (!s.data.length) return toast.error('Le fichier ne contient aucune ligne')
-      setFile(f); setSheet(s); setMapping(detectColumns(s.headers)); setRows([])
+      const m = detectColumns(s.headers)
+      m.email = bestEmailColumn(s.headers, s.data, m.email)
+      setFile(f); setSheet(s); setMapping(m); setRows([])
     } catch (e) {
       toast.error('Fichier illisible : ' + e.message)
     }
@@ -197,7 +200,7 @@ export default function CampaignPage() {
           creneaux: slots?.[i + k] || []
         }))
         const source = dossier
-          ? { dossier: { ...dossier, prenom: profil.prenom || dossier.prenom, metier: profil.metier || dossier.metier } }
+          ? { dossier: { ...dossier, prenom: profil.prenom || dossier.prenom, metier: profil.metier || dossier.metier, objet: profil.objet } }
           : { dossierText: pdf.text, profil }
         const { emails } = await postCampaign({ action: 'write', rows: chunk, ...source })
         for (const m of emails) {
@@ -309,13 +312,19 @@ export default function CampaignPage() {
           )}
           {(dossier || pdf) && !readingPdf && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: '0.9rem' }}>
-              {[['prenom', 'Prénom'], ['nom', 'Nom'], ['metier', 'Intitulé (objet du mail)'], ['expertise', 'Expertise (note Boond)']].map(([k, label]) => (
+              {[['prenom', 'Prénom'], ['nom', 'Nom'], ['metier', 'Intitulé du poste (ex. AI Product Owner)'], ['expertise', 'Expertise (note Boond)']].map(([k, label]) => (
                 <label key={k} style={{ fontSize: 12, color: '#555' }}>
                   {label}
                   <input value={profil[k] || ''} onChange={e => setProfil(p => ({ ...p, [k]: e.target.value }))}
                     style={{ width: '100%', marginTop: 3, padding: '6px 8px', borderRadius: 6, border: '1.5px solid #e0e0e0', fontFamily: font, fontSize: 12, boxSizing: 'border-box' }} />
                 </label>
               ))}
+              <label style={{ fontSize: 12, color: '#555', gridColumn: '1 / -1' }}>
+                Objet des mails (laisser vide pour l'objet standard)
+                <input value={profil.objet || ''} onChange={e => setProfil(p => ({ ...p, objet: e.target.value }))}
+                  placeholder={`ever"T - Groupe Wold | Dossier ${profil.metier || '…'} | ${profil.prenom || '…'}`}
+                  style={{ width: '100%', marginTop: 3, padding: '6px 8px', borderRadius: 6, border: '1.5px solid #e0e0e0', fontFamily: font, fontSize: 12, boxSizing: 'border-box' }} />
+              </label>
             </div>
           )}
         </section>
@@ -394,6 +403,12 @@ export default function CampaignPage() {
                 <Download size={14} /> Exporter en Excel
               </button>
             </div>
+            {withoutEmail > 0 && (
+              <p style={{ fontSize: 12, color: '#b26a00', margin: '-0.4rem 0 0.9rem' }}>
+                {withoutEmail} prospect(s) retenu(s) sans email : leur brouillon Gmail ne peut pas être créé.
+                Vérifiez à l'étape 2 que la colonne « Email » est la bonne, ou complétez l'email dans le fichier (Lusha / Zeliq).
+              </p>
+            )}
 
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -420,7 +435,9 @@ export default function CampaignPage() {
                           <td style={{ padding: 8 }}>
                             <div style={{ fontWeight: 600 }}>{r.prenom} {r.nom}</div>
                             <div style={{ color: '#777' }}>{r.poste}</div>
-                            <div style={{ color: '#999' }}>{r.email}</div>
+                            {r.email
+                              ? <div style={{ color: '#999' }}>{r.email}</div>
+                              : <div style={{ color: '#b26a00', fontSize: 11, fontWeight: 600 }}>Pas d'email</div>}
                           </td>
                           <td style={{ padding: 8 }}>
                             {r.check?.company ? (

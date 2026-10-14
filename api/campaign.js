@@ -245,7 +245,8 @@ async function writeEmails(dossier, rows, sender) {
 
   const consultant = consultantFirstName(dossier)
   const intitule = out.intitule || dossier.metier || ''
-  const objet = mailSubject(dossier)
+  // Objet choisi par le bizdev, sinon l'objet standard
+  const objet = String(dossier.objet || '').trim() || mailSubject(dossier)
   return rows.map(r => {
     const m = out.emails.find(e => e.id === r.id)
     const points = m?.points

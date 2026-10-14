@@ -75,15 +75,15 @@ function bodyText(msg) {
 
 const attachmentNames = (msg) => walkParts(msg.payload).map(p => p.filename).filter(Boolean)
 
-// Mail push : consultant et expertise, lus dans le nom du PDF joint, sinon dans l'objet.
+// Mail push : reconnu au dossier PDF joint (nommé « Dossier <expertise> — <Prénom Nom>.pdf »
+// par la campagne), ou à défaut à l'objet standard. Le bizdev peut ainsi changer l'objet.
 function pushInfo(subject, files) {
-  const m = subject.match(PUSH_SUBJECT)
-  if (!m) return null
   for (const f of files) {
     const d = f.match(DOSSIER_FILE)
     if (d) return { consultant: d[2].trim(), expertise: d[1].trim() }
   }
-  return { consultant: m[2].trim(), expertise: m[1].trim() }
+  const m = subject.match(PUSH_SUBJECT)
+  return m ? { consultant: m[2].trim(), expertise: m[1].trim() } : null
 }
 
 const dayDiff = (a, b) => Math.abs(new Date(a) - new Date(b)) / 86400000

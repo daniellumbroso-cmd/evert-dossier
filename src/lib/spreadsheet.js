@@ -7,7 +7,7 @@ import writeXlsxFile from 'write-excel-file/browser'
 // capté par linkedin avant d'être confondu avec les profils encadrés.
 export const FIELDS = [
   { key: 'linkedin', label: 'LinkedIn', test: h => /linkedin|url/.test(h) },
-  { key: 'email', label: 'Email', test: h => /mail/.test(h) },
+  { key: 'email', label: 'Email', test: h => /mail/.test(h) && !/statu|valid|verif|score|type|source|date/.test(h) },
   { key: 'prenom', label: 'Prénom', test: h => /prenom|first ?name/.test(h) },
   { key: 'nom', label: 'Nom', test: h => /^nom\b|last ?name|nom de famille/.test(h) },
   { key: 'poste', label: 'Poste', test: h => /poste|fonction|titre|job|title|intitule/.test(h) },
@@ -61,6 +61,21 @@ export async function readProspectFile(file) {
     .filter(r => r.some(Boolean))
   if (!rows.length) return { headers: [], data: [] }
   return { headers: rows[0], data: rows.slice(1) }
+}
+
+// Plusieurs colonnes « email » (Zeliq, Lusha : Email, Professional Email, Email 1…) :
+// on garde celle qui contient le plus d'adresses réellement remplies.
+export function bestEmailColumn(headers, data, current) {
+  const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim())
+  const candidates = headers
+    .map((h, i) => ({ i, h: norm(h) }))
+    .filter(({ h }) => /mail/.test(h) && !/statu|valid|verif|score|type|source|date/.test(h))
+  let best = current, bestCount = current != null ? data.filter(r => isEmail(r[current])).length : -1
+  for (const { i } of candidates) {
+    const count = data.filter(r => isEmail(r[i])).length
+    if (count > bestCount) { best = i; bestCount = count }
+  }
+  return best
 }
 
 export function toProspects(data, mapping) {
