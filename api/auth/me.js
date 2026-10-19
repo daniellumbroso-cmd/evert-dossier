@@ -1,11 +1,7 @@
-export default function handler(req, res) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return res.status(401).json({ error: 'Not authenticated' })
+import { getSession } from '../_session.js'
 
-  try {
-    const session = JSON.parse(Buffer.from(cookie, 'base64').toString())
-    res.json({ email: session.email, name: session.name, picture: session.picture })
-  } catch {
-    res.status(401).json({ error: 'Invalid session' })
-  }
+export default function handler(req, res) {
+  const session = getSession(req)
+  if (!session) return res.status(401).json({ error: 'Not authenticated' })
+  res.json({ email: session.email, name: session.name, picture: session.picture })
 }

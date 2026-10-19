@@ -1,13 +1,7 @@
 import { buildPptx } from './pptx-builder.js'
 import { buildPptxV2 } from './pptx-builder-v2.js'
 import { buildDossierFilename, contentDisposition } from './filename-utils.js'
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
-}
+import { getSession } from './_session.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()

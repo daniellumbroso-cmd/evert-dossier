@@ -14,15 +14,9 @@ import {
   actionTypes, findCompany, companyDomain, createCompany, createContact, createAction
 } from './boond-lib.js'
 import { googleAuth, googleErrorMessage, gmailClient, readCampaignLog } from './google-lib.js'
+import { getSession } from './_session.js'
 
 export const config = { maxDuration: 300 }
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
-}
 
 const PAGE_SIZE = 15
 const MAX_WRITE = 10

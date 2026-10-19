@@ -75,7 +75,7 @@ export default function LoginPage() {
               color: '#cc3333', fontSize: 13, fontFamily: 'Montserrat, sans-serif', fontWeight: 500
             }}>
               {error === 'unauthorized_domain'
-                ? '⚠️ Accès refusé — compte @ever-t.com requis'
+                ? '⚠️ Accès refusé — compte @ever-t.fr requis'
                 : '⚠️ Erreur d\'authentification, réessayez'}
             </div>
           )}

@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
+import { getSession } from './_session.js'
 
 function buildBoondJWT(userToken, clientToken, clientKey) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', type: 'JWT' })).toString('base64').replace(/=/g, '')
@@ -13,13 +14,6 @@ function buildBoondJWT(userToken, clientToken, clientKey) {
     .update(`${header}.${payload}`).digest('base64')
     .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
   return `${header}.${payload}.${signature}`
-}
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
 }
 
 function cleanHtml(str) {

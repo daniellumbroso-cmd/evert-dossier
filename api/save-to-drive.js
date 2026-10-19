@@ -1,13 +1,7 @@
 import { google } from 'googleapis'
 import { OAuth2Client } from 'google-auth-library'
 import { buildDossierFilename } from './filename-utils.js'
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
-}
+import { getSession } from './_session.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -71,16 +65,9 @@ export default async function handler(req, res) {
         }
       })
     } catch (permErr) {
-      // Si le partage domaine échoue, essayer "anyone with link"
-      console.log('Domain share failed, trying anyone:', permErr.message)
-      try {
-        await drive.permissions.create({
-          fileId,
-          requestBody: { type: 'anyone', role: 'reader' }
-        })
-      } catch (e) {
-        console.log('Permission fallback also failed:', e.message)
-      }
+      // Jamais de repli « tout le monde avec le lien » : le dossier contient des
+      // données personnelles. Il reste accessible à son auteur et au dossier partagé.
+      console.log('Domain share failed:', permErr.message)
     }
 
     // 3. Retourner le lien : présentation Slides éditable si la conversion a réussi
