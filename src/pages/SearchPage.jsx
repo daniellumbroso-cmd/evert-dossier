@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
-import { Search, ExternalLink, FileText, LogOut, ArrowLeft, Loader2 } from 'lucide-react'
+import { Search, ExternalLink, LogOut, ArrowLeft, Loader2 } from 'lucide-react'
 
 const SUGGESTIONS = [
   'Data Engineer Azure senior Paris',
@@ -162,6 +162,17 @@ export default function SearchPage() {
       </header>
 
       <main style={{ maxWidth: 1000, margin: '0 auto', padding: '2rem' }}>
+        {/* Bandeau : nouvelle page de matching offre → consultants */}
+        <Link to="/offre" style={{
+          display: 'block', textAlign: 'center', marginBottom: 24,
+          padding: '10px 16px', borderRadius: 10,
+          background: 'rgba(20,0,255,0.04)', border: '1.5px solid #d0d0f0',
+          fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
+          color: '#1400FF', textDecoration: 'none'
+        }}>
+          Nouveau : matching d'une offre → consultants par métier
+        </Link>
+
         {/* Hero */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <h1 style={{
@@ -347,18 +358,6 @@ export default function SearchPage() {
                     >
                       <ExternalLink size={12} /> Boond
                     </a>
-                    <Link
-                      to="/app"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        background: '#1400FF', border: '1.5px solid #1400FF',
-                        borderRadius: 8, padding: '7px 12px',
-                        fontFamily: 'Montserrat, sans-serif', fontSize: 12, fontWeight: 600,
-                        color: '#fff', textDecoration: 'none'
-                      }}
-                    >
-                      <FileText size={12} /> Dossier
-                    </Link>
                   </div>
                 </div>
               ))}

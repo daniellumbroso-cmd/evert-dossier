@@ -1,3 +1,6 @@
+// NB : endpoint actuellement non appelé par le front (l'ancien bouton « Dossier » de
+// SearchPage pointait vers /app sans ID et a été retiré). Conservé en attendant de
+// décider s'il faut le rebrancher ou le supprimer.
 import crypto from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'

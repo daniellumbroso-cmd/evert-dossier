@@ -9,6 +9,10 @@ import PptxGenJS from 'pptxgenjs'
 import fs from 'fs'
 import path from 'path'
 import { parseRichText } from './pptx-builder.js'
+import {
+  NB_CONSULTANTS_TEXTE, NB_TALENTS_GROUPE_TEXTE, NB_CLIENTS_GROUPE_TEXTE,
+  CA_TEXTE, CA_ANNEE, CONTACT_TEL, CONTACT_EMAIL
+} from './_lib/entreprise.js'
 
 const W = 7.5
 const H = 10.61
@@ -179,8 +183,8 @@ function addCover(pres, d) {
 
 const GROUPE_BASELINE =
   '**European Digital Group** — groupe européen de services tech, data et IA : ' +
-  '**2 600 talents**, **320 M€** de revenus. ever"T en porte l\'expertise ' +
-  '**Conseil Tech, Data.IA & Product**, avec 250 consultants.'
+  `**${NB_TALENTS_GROUPE_TEXTE} talents**, **${CA_TEXTE} M€** de revenus. ever"T en porte l'expertise ` +
+  `**Conseil Tech, Data.IA & Product**, avec ${NB_CONSULTANTS_TEXTE} consultants.`
 
 // ----------------------------------------------------------------- page profil
 
@@ -511,7 +515,7 @@ function addEcosystem(pres, d) {
   let y = 0.52
 
   y += eyebrow(slide, 'ever"T · WOLD · European Digital Group', ML, y, PURPLE, 8)
-  slide.addText('250 TALENTS EVER"T,\n2 600 DANS LE GROUPE', {
+  slide.addText(`${NB_CONSULTANTS_TEXTE} TALENTS EVER"T,\n${NB_TALENTS_GROUPE_TEXTE} DANS LE GROUPE`, {
     x: ML, y: y + 0.04, w: CW, h: 0.92, fontSize: 24, fontFace: MONT, bold: true,
     color: WHITE, valign: 'top', lineSpacingMultiple: LS.head })
   y += 1.18
@@ -533,7 +537,7 @@ function addEcosystem(pres, d) {
     bold: true, color: GDARK, charSpacing: 1.3, valign: 'middle' })
   y += 0.36
 
-  const lead = '**250 talents** en conseil Tech, Data.IA et Product. Une communauté tech IA-native, bâtie sur l\'apprentissage continu.'
+  const lead = `**${NB_CONSULTANTS_TEXTE} talents** en conseil Tech, Data.IA et Product. Une communauté tech IA-native, bâtie sur l'apprentissage continu.`
   let h = textHeight(lead, 11.5, CW) + 0.1
   slide.addText(parseRichText(lead, { fontSize: 11.5, fontFace: MONT, color: 'E2E2EA' }),
     { x: ML, y, w: CW, h, valign: 'top', lineSpacingMultiple: LS.body })
@@ -556,7 +560,8 @@ function addEcosystem(pres, d) {
     bold: true, color: GDARK, charSpacing: 1.3, valign: 'middle' })
   y += 0.38
 
-  const stats = [['2600', 'talents'], ['1800', 'clients'], ['320', 'm€ de revenus 2025']]
+  // Chiffres en gros : sans espace de milliers (« 2600 ») pour tenir dans la colonne
+  const stats = [[NB_TALENTS_GROUPE_TEXTE.replace(/\s/g, ''), 'talents'], [NB_CLIENTS_GROUPE_TEXTE, 'clients'], [CA_TEXTE, `m€ de revenus ${CA_ANNEE}`]]
   stats.forEach(([v, l], i) => {
     const x = ML + i * 1.75
     slide.addText(v, { x, y, w: 1.6, h: 0.5, fontSize: 30, fontFace: MONT, bold: true,
@@ -586,8 +591,8 @@ function addEcosystem(pres, d) {
   const c = d.contact || {}
   slide.addText(c.nom || 'Daniel LUMBROSO', { x: ML, y: fy + 0.22, w: 3.2, h: 0.24,
     fontSize: 10.5, fontFace: MONT, bold: true, color: WHITE, valign: 'top' })
-  slide.addText([c.role || 'Fondateur ever"T', c.tel || '06 12 54 76 13',
-                 c.email || 'daniel.lumbroso@ever-t.fr', 'ever-t.fr'].join(' · '), {
+  slide.addText([c.role || 'Fondateur ever"T', c.tel || CONTACT_TEL,
+                 c.email || CONTACT_EMAIL, 'ever-t.fr'].join(' · '), {
     x: ML, y: fy + 0.47, w: 4.3, h: 0.4, fontSize: 8, fontFace: MONT, color: GDARK,
     valign: 'top', lineSpacingMultiple: LS.body })
   logo(slide, 'v2_logo_evert.png', ML + CW - 1.86, fy + 0.5, 0.84)

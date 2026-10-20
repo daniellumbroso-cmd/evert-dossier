@@ -14,6 +14,20 @@ function RichText({ text, style = {} }) {
   )
 }
 
+// Bloc d'activité : thème + puces (ou texte libre, comme dans le PPTX)
+function Activite({ act, s }) {
+  return (
+    <div>
+      <p style={s.actTheme}>{act.theme}</p>
+      <ul style={s.ul}>
+        {act.points?.length > 0
+          ? act.points.map((p, k) => <li key={k} style={s.li}><RichText text={p} /></li>)
+          : act.texte && <li style={s.li}><RichText text={act.texte} /></li>}
+      </ul>
+    </div>
+  )
+}
+
 export default function DossierPreview({ dossier: d }) {
   const s = {
     page: {
@@ -49,6 +63,8 @@ export default function DossierPreview({ dossier: d }) {
       fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em',
       color: '#5c5c55', margin: '10px 0 4px'
     },
+    subRoleTitle: { fontSize: 13, fontWeight: 700, color: '#1400FF', margin: '10px 0 2px' },
+    subRoleDates: { fontSize: 12, fontStyle: 'italic', color: '#5c5c55', margin: '0 0 4px' },
     ul: { paddingLeft: '1rem', margin: '0 0 4px' },
     li: { marginBottom: 3, fontSize: 13 },
     tagRow: { display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 },
@@ -127,24 +143,26 @@ export default function DossierPreview({ dossier: d }) {
 
               {exp.projet && (
                 <p style={{ margin: '0 0 10px', fontSize: 13 }}>
-                  <strong>Projet :</strong> {exp.projet}
+                  <strong>Projet :</strong> <RichText text={exp.projet} />
                 </p>
               )}
 
-              {exp.activites?.map((act, j) => (
-                <div key={j}>
-                  <p style={s.actTheme}>{act.theme}</p>
-                  <ul style={s.ul}>
-                    {act.points?.map((p, k) => <li key={k} style={s.li}>{p}</li>)}
-                  </ul>
-                </div>
-              ))}
+              {/* Expérience fusionnée : sous-rôles (même rendu que le PPTX : ↳ titre, dates, activités) */}
+              {exp.sub_roles?.length > 0
+                ? exp.sub_roles.map((sub, j) => (
+                  <div key={j} style={{ marginTop: j > 0 ? 12 : 4 }}>
+                    <p style={s.subRoleTitle}>↳ {sub.titre}</p>
+                    {sub.dates && <p style={s.subRoleDates}>{sub.dates}</p>}
+                    {sub.activites?.map((act, k) => <Activite key={k} act={act} s={s} />)}
+                  </div>
+                ))
+                : exp.activites?.map((act, j) => <Activite key={j} act={act} s={s} />)}
 
               {exp.enjeux?.length > 0 && (
                 <div>
                   <p style={s.actTheme}>Enjeux</p>
                   <ul style={s.ul}>
-                    {exp.enjeux.map((e, j) => <li key={j} style={s.li}>{e}</li>)}
+                    {exp.enjeux.map((e, j) => <li key={j} style={s.li}><RichText text={e} /></li>)}
                   </ul>
                 </div>
               )}
@@ -153,7 +171,7 @@ export default function DossierPreview({ dossier: d }) {
                 <div>
                   <p style={s.actTheme}>Résultats</p>
                   <ul style={s.ul}>
-                    {exp.resultats.map((r, j) => <li key={j} style={s.li}>{r}</li>)}
+                    {exp.resultats.map((r, j) => <li key={j} style={s.li}><RichText text={r} /></li>)}
                   </ul>
                 </div>
               )}
