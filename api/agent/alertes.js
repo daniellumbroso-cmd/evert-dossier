@@ -32,10 +32,12 @@ export default async function handler(req, res) {
     const depuis30 = new Date(Date.now() - 30 * 86400000).toISOString()
     const depuis24h = new Date(Date.now() - 86400000).toISOString()
 
-    const [consultants, offres, forts] = await Promise.all([
+    const [consultants, offres, forts, base] = await Promise.all([
       db.select('consultants', `select=*&famille=not.is.null&or=(intercontrat.eq.true,and(fin_mission.gte.${t},fin_mission.lte.${limite}))`),
       db.select('offres', `select=id,titre,famille,analyse_ia,source,lien,recue_le&recue_le=gte.${depuis30}&statut=neq.archivee&analyse_ia=not.is.null`),
-      db.select('matchs', `select=id,score,offre_id,boond_id,offres(titre,source,lien),consultants(nom)&cree_le=gte.${depuis24h}&score=gte.${SEUIL_FORT}&statut=eq.a_valider&order=score.desc`)
+      db.select('matchs', `select=id,score,offre_id,boond_id,offres(titre,source,lien),consultants(nom)&cree_le=gte.${depuis24h}&score=gte.${SEUIL_FORT}&statut=eq.a_valider&order=score.desc`),
+      // État de la base : vide tant que le premier remplissage n'a pas eu lieu
+      db.select('consultants', 'select=famille,maj_boond_le&order=maj_boond_le.desc')
     ])
 
     const suggestions = (c) => offres
@@ -62,6 +64,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       date: t,
+      base: { consultants: base.length, avec_metier: base.filter(c => c.famille).length, derniere_maj: base[0]?.maj_boond_le || null },
       intercontrats,
       fins_mission: finsMission,
       matchs_forts: forts.map(m => ({

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Loader2, ExternalLink } from 'lucide-react'
+import { Loader2, ExternalLink, Database } from 'lucide-react'
 import AgentHeader from '../components/AgentHeader'
 import { BLUE, card, badge, fmtDate } from '../components/MatchCard'
 
@@ -36,23 +36,87 @@ function Consultant({ c }) {
   )
 }
 
+// Remplissage de la base depuis Boond, page par page, depuis le navigateur.
+// Le même traitement tourne chaque nuit via Make ; ce bouton sert au premier
+// remplissage et à forcer une mise à jour. Une page interrompue se reprend.
+function RemplissageBase({ base, onFini }) {
+  const [etat, setEtat] = useState(null) // { page, lus, ecrits, erreurs, fini, erreur }
+
+  const lancer = async (depart = 1) => {
+    let page = depart
+    let cumul = depart === 1 ? { lus: 0, ecrits: 0, erreurs: 0 } : etat
+    while (page) {
+      setEtat({ ...cumul, page, enCours: true })
+      try {
+        const r = await fetch(`/api/agent/index-consultants?page=${page}`, { method: 'POST' })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `Erreur ${r.status}`)
+        cumul = { lus: cumul.lus + j.lus, ecrits: cumul.ecrits + j.mis_a_jour + j.inchange, erreurs: cumul.erreurs + j.erreurs.length }
+        page = j.page_suivante
+      } catch (e) {
+        setEtat({ ...cumul, page, erreur: e.message })
+        return
+      }
+    }
+    setEtat({ ...cumul, fini: true })
+    toast.success('Base des consultants à jour')
+    onFini()
+  }
+
+  const vide = !base?.consultants
+  return (
+    <section style={{ ...card, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', ...(vide ? { borderColor: BLUE } : {}) }}>
+      <Database size={20} color={BLUE} />
+      <div style={{ flex: 1, minWidth: 220, fontSize: 13, color: '#444' }}>
+        {vide
+          ? <><b>La base des consultants est vide.</b> Lancez le premier remplissage depuis Boond (quelques minutes : Claude lit chaque fiche).</>
+          : <><b>{base.consultants} consultants</b> dans la base ({base.avec_metier} avec un métier reconnu), mise à jour le {fmtDate(base.derniere_maj)}.</>}
+        {etat && (
+          <div style={{ marginTop: 6, color: etat.erreur ? '#c62828' : '#666' }}>
+            {etat.enCours && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Loader2 size={12} className="animate-spin" /> Page {etat.page} en cours… </span>}
+            {etat.lus} fiches lues, {etat.ecrits} enregistrées{etat.erreurs ? `, ${etat.erreurs} en erreur` : ''}.
+            {etat.erreur && <> Arrêt page {etat.page} : {etat.erreur}</>}
+            {etat.fini && ' Terminé ✓'}
+          </div>
+        )}
+      </div>
+      {etat?.erreur
+        ? <button onClick={() => lancer(etat.page)} style={{ ...btnBleu }}>Reprendre page {etat.page}</button>
+        : <button onClick={() => lancer(1)} disabled={etat?.enCours} style={{ ...btnBleu, opacity: etat?.enCours ? 0.6 : 1 }}>
+            {etat?.enCours ? 'Remplissage…' : vide ? 'Remplir la base' : 'Mettre à jour maintenant'}
+          </button>}
+    </section>
+  )
+}
+
+const btnBleu = { border: 'none', background: BLUE, color: '#fff', borderRadius: 8, padding: '9px 16px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }
+
 export default function DashboardPage() {
   const [data, setData] = useState(null)
+  const [erreur, setErreur] = useState(null)
 
-  useEffect(() => {
+  const charger = () => {
     fetch('/api/agent/alertes')
-      .then(r => r.json().then(j => (r.ok ? j : Promise.reject(new Error(j.error)))))
-      .then(setData)
-      .catch(e => toast.error(e.message))
-  }, [])
+      .then(r => r.json().then(j => (r.ok ? j : Promise.reject(new Error(j.error || `Erreur ${r.status}`)))))
+      .then(j => { setData(j); setErreur(null) })
+      .catch(e => setErreur(e.message))
+  }
+  useEffect(charger, [])
 
   return (
     <div style={{ minHeight: '100vh', background: '#f7f7fb', fontFamily: font }}>
       <AgentHeader titre="Tableau de bord" />
       <main style={{ maxWidth: 1000, margin: '0 auto', padding: '1.75rem 1.5rem' }}>
-        {!data && <p style={{ color: '#888' }}><Loader2 size={14} className="animate-spin" /> Chargement…</p>}
+        {!data && !erreur && <p style={{ color: '#888' }}><Loader2 size={14} className="animate-spin" /> Chargement…</p>}
+        {erreur && (
+          <section style={{ ...card, borderColor: '#f3c0c0', fontSize: 14 }}>
+            <b>L'agent n'est pas encore branché.</b> {erreur}
+            {/Supabase/.test(erreur) && <div style={{ marginTop: 6, color: '#666', fontSize: 13 }}>Il manque les variables Supabase sur Vercel : voir docs/AGENT.md, « Mise en route ».</div>}
+          </section>
+        )}
         {data && (
           <>
+            <RemplissageBase base={data.base} onFini={charger} />
             <section style={{ ...card, background: 'rgba(20,0,255,0.04)', borderColor: 'rgba(20,0,255,0.15)', fontSize: 14 }}>{data.resume}</section>
 
             {data.matchs_forts.length > 0 && (
