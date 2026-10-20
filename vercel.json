@@ -17,6 +17,18 @@
     },
     "api/mail-sync.js": {
       "maxDuration": 300
+    },
+    "api/agent/index-consultants.js": {
+      "maxDuration": 300
+    },
+    "api/agent/match-offer.js": {
+      "maxDuration": 300
+    },
+    "api/agent/ingest-offers.js": {
+      "maxDuration": 300
+    },
+    "api/agent/push-draft.js": {
+      "maxDuration": 120
     }
   },
   "rewrites": [
