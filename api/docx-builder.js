@@ -161,12 +161,27 @@ function buildDocument(d, coverImgBuffer) {
       expChildren.push(p(parseInline(exp.projet, { size: 20 }), { after: 100, ...kl, keepNext: true }))
     }
 
-    exp.activites?.forEach(act => {
+    const pushActivite = act => {
       expChildren.push(p([t(act.theme, { size: 20, bold: true, color: BLACK })], { before: 120, after: 60, ...kl, keepNext: true }))
-      act.points?.forEach(pt =>
-        expChildren.push(p(parseInline(pt, { size: 20 }), { bullet: true, after: 40, ...kl, keepNext: true }))
-      )
-    })
+      if (act.points?.length) {
+        act.points.forEach(pt =>
+          expChildren.push(p(parseInline(pt, { size: 20 }), { bullet: true, after: 40, ...kl, keepNext: true }))
+        )
+      } else if (act.texte) {
+        expChildren.push(p(parseInline(act.texte, { size: 20 }), { bullet: true, after: 40, ...kl, keepNext: true }))
+      }
+    }
+
+    // Expérience fusionnée : sous-rôles (même rendu que le PPTX : ↳ titre en bleu, dates en italique)
+    if (exp.sub_roles?.length) {
+      exp.sub_roles.forEach(sub => {
+        expChildren.push(p([t('↳ ' + sub.titre, { size: 20, bold: true, color: BLUE })], { before: 200, after: 40, ...kl, keepNext: true }))
+        if (sub.dates) expChildren.push(p([t(sub.dates, { size: 18, italic: true })], { after: 60, ...kl, keepNext: true }))
+        sub.activites?.forEach(pushActivite)
+      })
+    } else {
+      exp.activites?.forEach(pushActivite)
+    }
 
     if (exp.enjeux?.length) {
       expChildren.push(p([t('Enjeux :', { size: 20, bold: true, color: BLACK })], { before: 120, after: 60, ...kl, keepNext: true }))

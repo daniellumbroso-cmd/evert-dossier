@@ -238,12 +238,15 @@ async function scoreAllLeads(anthropic, profile, leads) {
   const secondary = (profile.stack_secondary || []).join(', ')
   const role = profile.role || ''
 
-  // Détection du "métier" du candidat pour savoir quels titres de contact sont pertinents
-  const isProduct = /product|po\b|pm\b|product owner|product manager|product lead/i.test(role)
-  const isData = /data|analytics|bi|business intelligence/i.test(role)
-  const isDevOps = /devops|sre|site reliability|cloud|infra|platform|kubernetes|terraform/i.test(role)
-  const isDev = /developp|dev\b|backend|frontend|full[- ]?stack|tech lead|lead dev|architect|engineer|ing[eé]nieur|mobile|ios|android/i.test(role) && !isDevOps
-  const isDesign = /design|ux|ui\b/i.test(role)
+  // Détection du "métier" du candidat pour savoir quels titres de contact sont pertinents.
+  // Texte normalisé (minuscules, sans accents) + \b autour des sigles courts : sinon "bi"
+  // matche "mobile", "ux" matche "linux", "ios" matche "scénarios", etc.
+  const roleN = normalizeText(role)
+  const isProduct = /product|\bpo\b|\bpm\b|product owner|product manager|product lead/.test(roleN)
+  const isData = /data|analytics|\bbi\b|business intelligence/.test(roleN)
+  const isDevOps = /devops|\bsre\b|site reliability|cloud|infra|platform|kubernetes|terraform/.test(roleN)
+  const isDev = /developp|\bdev\b|backend|frontend|full[- ]?stack|tech lead|lead dev|architect|engineer|ingenieur|mobile|\bios\b|android/.test(roleN) && !isDevOps
+  const isDesign = /design|\bux\b|\bui\b/.test(roleN)
 
   const metierGuidance = []
   const acceptableGenericTitles = []
@@ -356,19 +359,25 @@ ${metierGuidance.join('\n')}
   return all
 }
 
+// Minuscules + suppression des accents, pour des regex de mots-clés fiables avec \b
+function normalizeText(str) {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
 function pickBestContact(contacts, profile) {
   if (!contacts.length) return null
-  const primary = (profile.stack_primary || []).map(s => s.toLowerCase()).filter(Boolean)
-  const secondary = (profile.stack_secondary || []).map(s => s.toLowerCase()).filter(Boolean)
+  const primary = (profile.stack_primary || []).map(normalizeText).filter(Boolean)
+  const secondary = (profile.stack_secondary || []).map(normalizeText).filter(Boolean)
   const withScore = contacts.map(c => {
-    const fn = (c.function || '').toLowerCase()
+    const fn = normalizeText(c.function)
     let s = 0
     // Bonus x3 pour matcher un mot de la stack principale dans la fonction
     for (const w of primary) if (w && fn.includes(w)) s += 30
     // Bonus modéré pour un mot secondaire
     for (const w of secondary) if (w && fn.includes(w)) s += 8
-    if (/cto|vp|head|lead|principal|director technique|responsable tech/i.test(fn)) s += 10
-    if (/manager|senior/i.test(fn)) s += 4
+    // \b obligatoire : "cto" est contenu dans "director"
+    if (/\b(cto|vp|head|lead(er)?|principal)\b|direct(o|eu)r technique|responsable tech/.test(fn)) s += 10
+    if (/\b(manager|senior)\b/.test(fn)) s += 4
     return { c, s }
   })
   withScore.sort((a, b) => b.s - a.s)

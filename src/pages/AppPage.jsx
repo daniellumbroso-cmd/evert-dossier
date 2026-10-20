@@ -4,7 +4,7 @@ import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
 import DossierPreview from '../components/DossierPreview'
-import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search, Send, Megaphone, RefreshCw } from 'lucide-react'
+import { Upload, FileText, Sparkles, LogOut, ChevronDown, Search, Send, Megaphone, RefreshCw, Target } from 'lucide-react'
 import { buildDossierFilename } from '../../api/filename-utils.js'
 import { extractPdfText, MIN_USABLE_TEXT, MAX_UPLOAD_BYTES } from '../lib/pdfText'
 import { CAMPAIGN_STORAGE_KEY } from '../lib/campaign'
@@ -298,7 +298,7 @@ export default function AppPage() {
     // Pour le corps : nettoyer le gras ** pour Gmail, garder les tirets comme tirets
     let copyText = text
     if (type === 'corps') {
-      copyText = text.replace(/**([^*]+)**/g, '$1') // retirer ** mais garder le texte
+      copyText = text.replace(/\*\*(.+?)\*\*/g, '$1') // retirer ** mais garder le texte
     }
     await navigator.clipboard.writeText(copyText)
     if (type === 'objet') { setCopiedObjet(true); setTimeout(() => setCopiedObjet(false), 2000) }
@@ -426,6 +426,20 @@ export default function AppPage() {
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(20,0,255,0.04)'; e.currentTarget.style.color = '#1400FF' }}
               >
                 <Send size={13} /> Match Dossier
+              </Link>
+              <Link to="/offre" style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600,
+                color: '#1400FF', textDecoration: 'none',
+                padding: '7px 14px', borderRadius: 8,
+                border: '1.5px solid #1400FF',
+                background: 'rgba(20,0,255,0.04)',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#1400FF'; e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(20,0,255,0.04)'; e.currentTarget.style.color = '#1400FF' }}
+              >
+                <Target size={13} /> Matching offre
               </Link>
               {/* Campagne à partir d'un dossier PDF déjà produit : on oublie le dossier en cours */}
               <Link to="/campagne" onClick={() => sessionStorage.removeItem(CAMPAIGN_STORAGE_KEY)} style={{
@@ -856,7 +870,6 @@ export default function AppPage() {
                   <a
                     href={savedUrl}
                     target="_blank" rel="noopener noreferrer"
-                    rel="noreferrer"
                     style={{
                       padding: '9px 16px', borderRadius: 8, textDecoration: 'none',
                       background: '#1400FF', color: '#fff',

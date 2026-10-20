@@ -4,6 +4,7 @@ import fs from 'fs'
 import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 import { getSenderInfo } from './sender.js'
 import { getSession } from './_session.js'
+import { NB_INGENIEURS_MAIL_TEXTE } from './_lib/entreprise.js'
 
 export const config = { api: { bodyParser: false } }
 
@@ -128,7 +129,7 @@ RÉPONDS UNIQUEMENT EN JSON valide, sans backticks, sans texte avant ou après :
 
 
 // ── INFOS EXPÉDITEUR pour le mode push ──
-const PUSH_PROMPT = `Tu es un expert en rédaction de mails de prospection commerciale pour ever"T, une ESN tech IA-native, filiale Product & data.iA de WOLD | EDG, avec +160 ingénieurs.
+const PUSH_PROMPT = `Tu es un expert en rédaction de mails de prospection commerciale pour ever"T, une ESN tech IA-native, filiale Product & data.iA de WOLD | EDG, avec ${NB_INGENIEURS_MAIL_TEXTE} ingénieurs.
 
 Tu génères des mails "push dossier" : emails courts et percutants envoyés à des prospects LinkedIn pour présenter un consultant ever"T.
 
@@ -141,7 +142,7 @@ CORPS :
 Cher/Chère [Prénom prospect],
 J'espère que vous allez bien.
 
-Je suis [NOM_EXPEDITEUR], [ROLE] d'ever"T | Groupe Wold : société d'innovation spécialisée en [domaine pertinent] de +160 ingénieurs.
+Je suis [NOM_EXPEDITEUR], [ROLE] d'ever"T | Groupe Wold : société d'innovation spécialisée en [domaine pertinent] de ${NB_INGENIEURS_MAIL_TEXTE} ingénieurs.
 
 [Prénom candidat], un de nos [profil] spécialisé[s] en [stack principale], nous a exprimé son souhait de rejoindre [Entreprise prospect].
 
@@ -260,7 +261,7 @@ export default async function handler(req, res) {
         const base64 = pdfBuffer.toString('base64')
         pushMessages = [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }, { type: 'text', text: `Génère un mail push dossier ever"T.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\nPROFIL PROSPECT : voir PDF ci-joint.${prospectInfo ? '\nINFO COMPLÉMENTAIRE : ' + prospectInfo : ''}` }] }]
       } else {
-        pushMessages = [{ role: 'user', content: `Génère un mail push dossier everT.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\n${prospectInfo ? 'PROFIL PROSPECT (cibler ce contexte précis) :\n' + prospectInfo : 'PAS DE PROSPECT SPÉCIFIQUE : génère un mail push générique percutant, sans destinataire nommé, avec une formule ouverte type "Cher(e) [Prénom]," — le mail sera personnalisé manuellement ensuite.'}` }]
+        pushMessages = [{ role: 'user', content: `Génère un mail push dossier ever"T.\n\nINFOS EXPÉDITEUR :\n${senderInfo}\n\nDOSSIER CANDIDAT :\n${candidatSummary}\n\n${prospectInfo ? 'PROFIL PROSPECT (cibler ce contexte précis) :\n' + prospectInfo : 'PAS DE PROSPECT SPÉCIFIQUE : génère un mail push générique percutant, sans destinataire nommé, avec une formule ouverte type "Cher(e) [Prénom]," — le mail sera personnalisé manuellement ensuite.'}` }]
       }
 
       let rawPush = ''
@@ -271,8 +272,9 @@ export default async function handler(req, res) {
         const lastBrace = rawPush.lastIndexOf('}')
         if (firstBrace === -1 || lastBrace === -1) throw new Error('Pas de JSON trouvé dans la réponse')
         let cleanedPush = rawPush.substring(firstBrace, lastBrace + 1)
-        // Fix : le guillemet dans ever"T casse le JSON — on l'échappe avant parsing
-        cleanedPush = cleanedPush.replace(/ever"T/g, 'everT')
+        // Le guillemet de ever"T casse le JSON s'il n'est pas échappé : on l'échappe
+        // (ever"T ou ever\"T → ever\"T) pour que JSON.parse rende bien ever"T
+        cleanedPush = cleanedPush.replace(/ever\\?"T/g, 'ever\\"T')
         let result
         try {
           result = JSON.parse(cleanedPush)
@@ -282,7 +284,7 @@ export default async function handler(req, res) {
           let objet = '', corps = ''
           for (const line of lines) {
             const om = line.match(/^\s*"objet"\s*:\s*"(.+?)"\s*,?\s*$/)
-            if (om) objet = om[1]
+            if (om) objet = om[1].replace(/\\"/g, '"')
           }
           // Pour corps, prendre tout entre 'corps': ' et la derniere '
           const corpsStart = cleanedPush.indexOf('"corps"')
@@ -293,6 +295,7 @@ export default async function handler(req, res) {
             if (firstQuote > -1 && lastQuote > firstQuote) {
               corps = afterCorps.substring(firstQuote + 1, lastQuote)
                 .replace(/\\n/g, '\n')
+                .replace(/\\"/g, '"')
             }
           }
           if (objet && corps) {

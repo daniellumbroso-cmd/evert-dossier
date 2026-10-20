@@ -8,6 +8,9 @@ import AppPage from './pages/AppPage'
 import SearchPage from './pages/SearchPage'
 import DebugBoondPage from './pages/DebugBoondPage'
 import MatchPage from './pages/MatchPage'
+import MatchOfferPage from './pages/MatchOfferPage'
+import OffresPage from './pages/OffresPage'
+import DashboardPage from './pages/DashboardPage'
 // Chargée à la demande : elle embarque les bibliothèques Excel
 const CampaignPage = React.lazy(() => import('./pages/CampaignPage'))
 const SyncPage = React.lazy(() => import('./pages/SyncPage'))
@@ -69,6 +72,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           </ProtectedRoute>
         } />
         {/* Ancienne URL /push → redirige vers /match (compatibilité favoris) */}
+        <Route path="/offre" element={
+          <ProtectedRoute>
+            <MatchOfferPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/offres" element={
+          <ProtectedRoute>
+            <OffresPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/tableau-de-bord" element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        } />
         <Route path="/push" element={<Navigate to="/match" replace />} />
       </Routes>
       </ErrorBoundary>

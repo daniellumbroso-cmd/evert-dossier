@@ -158,14 +158,30 @@ const mailPlain = (text, signatureHtml) => {
 }
 
 // Message MIME : texte brut + HTML (avec la signature Gmail) + PDF en pièce jointe.
+// Sans `attachment` (push préparé par l'agent), le mail part sans pièce jointe.
 export function buildMime({ to, subject, text, signatureHtml, attachment }) {
   const id = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
   const mixed = `evert_m_${id}`, alt = `evert_a_${id}`
-  const fileName = attachment.name
-  const asciiName = fileName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[—–]/g, '-').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '')
   const part = (type, body) => [
     `Content-Type: ${type}; charset="UTF-8"`, 'Content-Transfer-Encoding: base64', '', wrap76(b64(body.replace(/\r?\n/g, '\r\n')))
   ].join('\r\n')
+  if (!attachment) {
+    return [
+      `To: ${to}`,
+      `Subject: ${encodedWord(subject)}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      '',
+      `--${alt}`,
+      part('text/plain', mailPlain(text, signatureHtml)),
+      `--${alt}`,
+      part('text/html', mailHtml(text, signatureHtml)),
+      `--${alt}--`,
+      ''
+    ].join('\r\n')
+  }
+  const fileName = attachment.name
+  const asciiName = fileName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[—–]/g, '-').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '')
   return [
     `To: ${to}`,
     `Subject: ${encodedWord(subject)}`,
