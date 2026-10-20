@@ -38,7 +38,7 @@ create table if not exists offres (
   titre                 text,
   texte                 text not null,
   famille               text,
-  analyse               jsonb,                     -- offre structurée par Claude
+  analyse_ia            jsonb,                     -- offre structurée par Claude
   recue_le              timestamptz not null default now(),
   cree_par              text,
   unique (source, source_ref)

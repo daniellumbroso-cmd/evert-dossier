@@ -34,12 +34,12 @@ export default async function handler(req, res) {
 
     const [consultants, offres, forts] = await Promise.all([
       db.select('consultants', `select=*&famille=not.is.null&or=(intercontrat.eq.true,and(fin_mission.gte.${t},fin_mission.lte.${limite}))`),
-      db.select('offres', `select=id,titre,famille,analyse,source,lien,recue_le&recue_le=gte.${depuis30}&statut=neq.archivee&analyse=not.is.null`),
+      db.select('offres', `select=id,titre,famille,analyse_ia,source,lien,recue_le&recue_le=gte.${depuis30}&statut=neq.archivee&analyse_ia=not.is.null`),
       db.select('matchs', `select=id,score,offre_id,boond_id,offres(titre,source,lien),consultants(nom)&cree_le=gte.${depuis24h}&score=gte.${SEUIL_FORT}&statut=eq.a_valider&order=score.desc`)
     ])
 
     const suggestions = (c) => offres
-      .map(o => ({ o, s: scorer(c, { ...o.analyse, famille: o.famille }, today) }))
+      .map(o => ({ o, s: scorer(c, { ...o.analyse_ia, famille: o.famille }, today) }))
       .filter(x => x.s)
       .sort((a, b) => b.s.score - a.s.score)
       .slice(0, OFFRES_PAR_CONSULTANT)

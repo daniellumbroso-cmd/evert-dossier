@@ -181,7 +181,7 @@ export default async function handler(req, res) {
     }).sort((a, b) => b.score - a.score)
 
     // 5. Enregistrement (offre + matchs à valider)
-    const ligneOffre = { titre: offre.titre, famille: offre.famille, analyse: offre, statut: 'matchee' }
+    const ligneOffre = { titre: offre.titre, famille: offre.famille, analyse_ia: offre, statut: 'matchee' }
     const [saved] = existante
       ? await db.update('offres', `id=eq.${existante.id}`, ligneOffre)
       : sourceRef

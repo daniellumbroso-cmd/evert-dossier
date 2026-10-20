@@ -32,7 +32,7 @@ export default function MatchOfferPage() {
       .then(r => r.json().then(j => (r.ok ? j : Promise.reject(new Error(j.error)))))
       .then(j => setData({
         offre_id: j.offre.id,
-        offre: { ...(j.offre.analyse || {}), titre: j.offre.titre, famille_label: j.offre.famille_label },
+        offre: { ...(j.offre.analyse_ia || {}), titre: j.offre.titre, famille_label: j.offre.famille_label },
         source: j.offre, resultats: j.resultats
       }))
       .catch(e => toast.error(e.message))
