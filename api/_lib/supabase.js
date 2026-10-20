@@ -8,7 +8,11 @@ export function supabaseFromEnv() {
   const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
-  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
+  // Nouvelles clés secrètes (sb_secret_…) : en-tête apikey seul, ce ne sont pas des JWT.
+  // Ancienne clé service_role (JWT) : apikey + Authorization Bearer.
+  const headers = key.startsWith('sb_')
+    ? { apikey: key, 'Content-Type': 'application/json' }
+    : { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
 
   async function call(method, path, { body, prefer } = {}) {
     const r = await fetch(`${url}/rest/v1/${path}`, {

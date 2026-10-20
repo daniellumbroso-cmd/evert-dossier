@@ -58,7 +58,7 @@ Pour modifier les familles ou les poids, éditez ces deux fichiers puis lancez `
 | Variable | Valeur |
 |---|---|
 | `SUPABASE_URL` | URL du projet |
-| `SUPABASE_SERVICE_ROLE_KEY` | clé service_role |
+| `SUPABASE_SERVICE_ROLE_KEY` | clé secrète : nouvelle clé `sb_secret_…` (API Keys → Secret keys) ou ancienne clé `service_role` |
 | `AGENT_API_KEY` | secret de 40 caractères ou plus, partagé avec Make : `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
 | `AGENT_MODEL` | *(facultatif)* modèle Claude, `claude-opus-5-5` par défaut |
 | `AGENT_INDEX_PAGE_SIZE` | *(facultatif)* consultants par appel, 12 par défaut |
