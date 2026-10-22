@@ -1,11 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
-}
+import { getSession } from './_session.js'
 
 const SYSTEM = `Tu rédiges 2 messages de "push dossier" pour ever"T (ESN IA-native, Paris) :
 un EMAIL et un MESSAGE LinkedIn court, à un contact client, pour lui proposer proactivement un consultant.

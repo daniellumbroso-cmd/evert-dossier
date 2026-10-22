@@ -2,13 +2,6 @@ import PptxGenJS from 'pptxgenjs'
 import fs from 'fs'
 import path from 'path'
 
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
-}
-
 const BLUE = '1400FF'
 const WHITE = 'FFFFFF'
 const BLACK = '111111'

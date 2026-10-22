@@ -15,15 +15,9 @@ import {
   googleAuth, googleErrorMessage, startPdfUpload, isDriveUploadUrl, sendPdfChunk,
   downloadFile, buildMime, createDraft, appendCampaignLog, gmailSignature
 } from './google-lib.js'
+import { getSession } from './_session.js'
 
 export const config = { maxDuration: 300 }
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
-}
 
 // En deçà, un contact est considéré comme déjà travaillé : un collègue l'a
 // touché récemment, on ne le relance pas par-dessus.

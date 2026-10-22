@@ -24,7 +24,7 @@ Niveau requis : aucune compétence dev nécessaire
 ### 1.2 Créer un nouveau repo
 → https://github.com/new
 - Name : `evert-dossier`
-- Visibility : **Private** ⚠️ (le code contient la config de votre app)
+- Visibility : **Private** ⚠️ (le code décrit l'accès à Boond et à Gmail)
 - Cliquer "Create repository"
 
 ### 1.3 Pousser le code
@@ -134,8 +134,8 @@ Ajouter ces variables une par une :
 | `GOOGLE_CLIENT_SECRET` | Client Secret récupéré à l'étape 2.4 |
 | `GOOGLE_REDIRECT_URI` | `https://votre-app.vercel.app/api/auth/callback` |
 | `GOOGLE_DRIVE_FOLDER_ID` | L'ID du dossier Drive (étape 3.2) |
-| `SESSION_SECRET` | Une chaîne aléatoire longue (ex: `evert2024secretsessionxyz789abc`) |
-| `ALLOWED_DOMAIN` | `ever-t.com` |
+| `SESSION_SECRET` | Une chaîne aléatoire de 32 caractères minimum, générée avec `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
+| `ALLOWED_DOMAIN` | `ever-t.fr` |
 
 ### 5.1 Relancer le déploiement
 → Vercel → votre projet → Deployments → "Redeploy" sur le dernier déploiement
@@ -156,7 +156,7 @@ Ajouter ces variables une par une :
 ## En cas de problème
 
 ### "Accès refusé — compte @ever-t.com requis"
-→ Vérifier que la variable `ALLOWED_DOMAIN` est bien `ever-t.com` (sans @)
+→ Vérifier que la variable `ALLOWED_DOMAIN` est bien `ever-t.fr` (sans @)
 
 ### "Erreur Google Drive"
 → Vérifier que le compte connecté a bien accès au dossier Drive

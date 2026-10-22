@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
+import { getSession } from './_session.js'
 
 // bodyParser reste sur false : on lit le body JSON à la main via req.on('data')
 // pour rester compatible avec le pattern serverless Vercel actuel (le handler
@@ -20,13 +21,6 @@ function buildBoondJWT(userToken, clientToken, clientKey) {
     .update(`${header}.${payload}`).digest('base64')
     .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
   return `${header}.${payload}.${signature}`
-}
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try { return JSON.parse(Buffer.from(cookie, 'base64').toString()) }
-  catch { return null }
 }
 
 async function boondGet(apiUrl, path, headers) {

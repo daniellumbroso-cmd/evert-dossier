@@ -3,18 +3,9 @@ import formidable from 'formidable'
 import fs from 'fs'
 import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 import { getSenderInfo } from './sender.js'
+import { getSession } from './_session.js'
 
 export const config = { api: { bodyParser: false } }
-
-function getSession(req) {
-  const cookie = req.cookies?.evert_session
-  if (!cookie) return null
-  try {
-    return JSON.parse(Buffer.from(cookie, 'base64').toString())
-  } catch {
-    return null
-  }
-}
 
 const SYSTEM_PROMPT = `Tu es un expert en rédaction de dossiers de compétences pour Ever"T, une ESN tech IA-native (Humilité. Progrès. Engagement).
 
